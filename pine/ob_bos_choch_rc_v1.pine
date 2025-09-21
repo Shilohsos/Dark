@@ -52,12 +52,20 @@ if barstate.isconfirmed
         array.push(swingLowIdx, bar_index - swingLen)
 
     if lookback > 0
-        while array.size(swingHighIdx) > 0 and bar_index - array.get(swingHighIdx, 0) > lookback
-            array.shift(swingHighIdx)
-            array.shift(swingHighVals)
-        while array.size(swingLowIdx) > 0 and bar_index - array.get(swingLowIdx, 0) > lookback
-            array.shift(swingLowIdx)
-            array.shift(swingLowVals)
+        while array.size(swingHighIdx) > 0
+            int oldestHighIdx = array.get(swingHighIdx, 0)
+            if bar_index - oldestHighIdx > lookback
+                array.shift(swingHighIdx)
+                array.shift(swingHighVals)
+            else
+                break
+        while array.size(swingLowIdx) > 0
+            int oldestLowIdx = array.get(swingLowIdx, 0)
+            if bar_index - oldestLowIdx > lookback
+                array.shift(swingLowIdx)
+                array.shift(swingLowVals)
+            else
+                break
 
 lastHH = array.size(swingHighVals) > 0 ? array.get(swingHighVals, array.size(swingHighVals) - 1) : na
 lastHHIndex = array.size(swingHighIdx) > 0 ? array.get(swingHighIdx, array.size(swingHighIdx) - 1) : na
