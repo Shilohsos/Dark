@@ -135,15 +135,15 @@ plotStructureStub(float level, string title, color baseColor, int direction) =>
         float offset = syminfo.mintick * 2.0
         float labelLevel = direction == 1 ? level + offset : level - offset
         int shift = math.max(1, stubLenBars)
-        labelStyle = direction == 1 ? label.style_label_down : label.style_label_up
+        label_style labelStyle = direction == 1 ? label.style_label_down : label.style_label_up
         label stubLabel = label.new(
-            bar_index + shift,
-            labelLevel,
-            text=title,
-            style=labelStyle,
-            size=size.tiny,
-            textcolor=color.white,
-            color=color.new(baseColor, 0)
+            x = bar_index + shift,
+            y = labelLevel,
+            text = title,
+            style = labelStyle,
+            size = size.tiny,
+            textcolor = color.white,
+            color = color.new(baseColor, 0)
         )
         array.push(bosLabels, stubLabel)
     trimLines(bosLines, 30)
