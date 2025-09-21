@@ -27,17 +27,17 @@ if shortCondition
     activeShortEntry := close
     activeLongEntry := na
 
-longStop = na
-longTp1 = na
-longTp2 = na
+float longStop = na
+float longTp1 = na
+float longTp2 = na
 if not na(activeLongEntry)
     longStop := activeLongEntry * (1 - slPercent * 0.01)
     longTp1 := activeLongEntry * (1 + tp1Percent * 0.01)
     longTp2 := activeLongEntry * (1 + tp2Percent * 0.01)
 
-shortStop = na
-shortTp1 = na
-shortTp2 = na
+float shortStop = na
+float shortTp1 = na
+float shortTp2 = na
 if not na(activeShortEntry)
     shortStop := activeShortEntry * (1 + slPercent * 0.01)
     shortTp1 := activeShortEntry * (1 - tp1Percent * 0.01)
