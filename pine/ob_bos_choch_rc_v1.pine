@@ -144,7 +144,7 @@ f_trim_structures() =>
     f_trim_lines(bosLines, maxStructures)
     f_trim_labels(bosLabels, maxStructures)
 
-f_plot_structure_stub(float price, string text, color baseColor, int direction) =>
+f_plot_structure_stub(float price, string labelTxt, color baseColor, int direction) =>
     if not na(price)
         if showLines
             line stubLine = line.new(bar_index, price, bar_index + stubLenBars, price, extend=extend.none, color=baseColor, width=1)
@@ -153,7 +153,7 @@ f_plot_structure_stub(float price, string text, color baseColor, int direction) 
             float offset = syminfo.mintick * 2.0
             float labelPrice = direction == 1 ? price + offset : price - offset
             int labelShift = math.max(1, int(math.round(stubLenBars * 0.5)))
-            label stubLabel = label.new(bar_index + labelShift, labelPrice, text, style=direction == 1 ? label.style_label_down : label.style_label_up, color=color.new(baseColor, 0), textcolor=color.white, size=size.tiny)
+            label stubLabel = label.new(bar_index + labelShift, labelPrice, text=labelTxt, style=direction == 1 ? label.style_label_down : label.style_label_up, color=color.new(baseColor, 0), textcolor=color.white, size=size.tiny)
             array.push(bosLabels, stubLabel)
 
 bosSourceBull = closeOnly ? close : bosWickOK ? high : close
