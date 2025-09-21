@@ -157,8 +157,8 @@ f_register_ob(int direction, bool fromChoch) =>
             bool isBear = c < o
             if not isBear
                 continue
-            float range = h - l
-            float bodyPct = range != 0 ? math.abs(c - o) / range * 100.0 : 0.0
+            float candleRange = h - l
+            float bodyPct = candleRange != 0 ? math.abs(c - o) / candleRange * 100.0 : 0.0
             if bodyPct < obBodyPct
                 continue
             top := math.max(o, c)
@@ -190,8 +190,8 @@ f_register_ob(int direction, bool fromChoch) =>
             bool isBull = c > o
             if not isBull
                 continue
-            float range = h - l
-            float bodyPct = range != 0 ? math.abs(c - o) / range * 100.0 : 0.0
+            float candleRange = h - l
+            float bodyPct = candleRange != 0 ? math.abs(c - o) / candleRange * 100.0 : 0.0
             if bodyPct < obBodyPct
                 continue
             top := h
