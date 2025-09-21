@@ -527,10 +527,17 @@ if barstate.isconfirmed
             // --- OB box draw/update ---
             if showOBBox
                 if not isBox(bRef)
-                    bRef = box.new(leftIdx, boxTop, leftIdx, boxBottom, bgcolor=color.new(dir == 1 ? bullObColor : bearObColor, 90), border_color=obLineColor)
+                    bRef := box.new(
+                        left          = leftIdx,
+                        top           = boxTop,
+                        right         = bar_index + stubLenBars,
+                        bottom        = boxBottom,
+                        bgcolor       = color.new(dir == 1 ? bullObColor : bearObColor, 90),
+                        border_color  = obLineColor
+                    )
                     array.set(obBoxes, i, bRef)
-            if isBox(bRef)
-                box.set_left(bRef, leftIdx)
+                if isBox(bRef)
+                    box.set_left(bRef, leftIdx)
                     box.set_top(bRef, boxTop)
                     box.set_bottom(bRef, boxBottom)
                     box.set_right(bRef, bar_index)
