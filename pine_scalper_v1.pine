@@ -1,0 +1,20 @@
+//@version=5
+indicator("Pine Scalper v1", overlay=true)
+
+fastLength = input.int(50, title="Fast SMA Length")
+slowLength = input.int(200, title="Slow SMA Length")
+
+fastSma = ta.sma(close, fastLength)
+slowSma = ta.sma(close, slowLength)
+
+plot(fastSma, title="Fast SMA", color=color.new(color.teal, 0), linewidth=2)
+plot(slowSma, title="Slow SMA", color=color.new(color.orange, 0), linewidth=2)
+
+longCondition = ta.crossover(fastSma, slowSma)
+shortCondition = ta.crossunder(fastSma, slowSma)
+
+plotshape(longCondition, title="Buy Signal", location=location.belowbar, color=color.new(color.green, 0), style=shape.labelup, text="Buy")
+plotshape(shortCondition, title="Sell Signal", location=location.abovebar, color=color.new(color.red, 0), style=shape.labeldown, text="Sell")
+
+alertcondition(longCondition, title="Fast SMA Crosses Above Slow SMA", message="Buy Signal: Fast SMA crossed above Slow SMA")
+alertcondition(shortCondition, title="Fast SMA Crosses Below Slow SMA", message="Sell Signal: Fast SMA crossed below Slow SMA")
