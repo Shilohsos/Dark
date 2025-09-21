@@ -215,67 +215,65 @@ trimObArrays() =>
         deleteLabel(removedLabel)
 
 registerOB(int direction, bool fromChoch) =>
-    if direction == 1 and not (obType == "both" or obType == "bullish")
-        return
-    if direction == -1 and not (obType == "both" or obType == "bearish")
-        return
-    float topVal = na
-    float bottomVal = na
-    float bodyTop = na
-    float bodyBottom = na
-    int leftIdx = na
-    for offset = 1 to obLookback
-        int idx = bar_index - offset
-        if idx < 0
+    bool isBull = direction == 1
+    bool allowed = isBull ? (obType == "both" or obType == "bullish") : (obType == "both" or obType == "bearish")
+    if allowed
+        float topVal = na
+        float bottomVal = na
+        float bodyTop = na
+        float bodyBottom = na
+        int leftIdx = na
+        for offset = 1 to obLookback
+            int idx = bar_index - offset
+            if idx < 0
+                break
+            float o = open[offset]
+            float c = close[offset]
+            float h = high[offset]
+            float l = low[offset]
+            bool isOpposing = isBull ? c < o : c > o
+            if not isOpposing
+                continue
+            float candleRange = h - l
+            float bodyPct = candleRange == 0.0 ? 0.0 : math.abs(c - o) / candleRange * 100.0
+            if bodyPct < obBodyPct
+                continue
+            topVal := h
+            bottomVal := l
+            bodyTop := math.max(o, c)
+            bodyBottom := math.min(o, c)
+            leftIdx := idx
             break
-        float o = open[offset]
-        float c = close[offset]
-        float h = high[offset]
-        float l = low[offset]
-        bool isOpposing = direction == 1 ? c < o : c > o
-        if not isOpposing
-            continue
-        float candleRange = h - l
-        float bodyPct = candleRange == 0.0 ? 0.0 : math.abs(c - o) / candleRange * 100.0
-        if bodyPct < obBodyPct
-            continue
-        topVal := h
-        bottomVal := l
-        bodyTop := math.max(o, c)
-        bodyBottom := math.min(o, c)
-        leftIdx := idx
-        break
-    if na(leftIdx) or na(topVal) or na(bottomVal)
-        return
-    color lineColor = direction == 1 ? color.new(color.green, 0) : color.new(color.red, 0)
-    color boxColor = direction == 1 ? bullObColor : bearObColor
-    line topLine = na
-    line bottomLine = na
-    box obBox = na
-    label obLabel = na
-    if showLines
-        topLine := line.new(leftIdx, topVal, leftIdx + stubLenBars, topVal, extend=extend.none, width=1, color=lineColor)
-        bottomLine := line.new(leftIdx, bottomVal, leftIdx + stubLenBars, bottomVal, extend=extend.none, width=1, color=lineColor)
-    if showOBBox
-        obBox := box.new(leftIdx, topVal, leftIdx + stubLenBars, bottomVal, bgcolor=color.new(boxColor, 85), border_color=color.new(lineColor, 0))
-    if showLabels
-        string lblTxt = direction == 1 ? "Bull OB" : "Bear OB"
-        float lblPrice = direction == 1 ? topVal : bottomVal
-        obLabel := label.new(leftIdx, lblPrice, text=lblTxt, style=label.style_label_left, size=size.tiny, textcolor=color.white, color=color.new(boxColor, 0))
-    array.push(obDirs, direction)
-    array.push(obActive, true)
-    array.push(obMitigated, false)
-    array.push(obFromChoch, fromChoch)
-    array.push(obTops, topVal)
-    array.push(obBottoms, bottomVal)
-    array.push(obBodyTops, bodyTop)
-    array.push(obBodyBottoms, bodyBottom)
-    array.push(obLeftIdx, leftIdx)
-    array.push(obTopLines, topLine)
-    array.push(obBottomLines, bottomLine)
-    array.push(obBoxes, obBox)
-    array.push(obLabels, obLabel)
-    trimObArrays()
+        if not na(leftIdx) and not na(topVal) and not na(bottomVal)
+            color lineColor = isBull ? color.new(color.green, 0) : color.new(color.red, 0)
+            color boxColor = isBull ? bullObColor : bearObColor
+            line topLine = na
+            line bottomLine = na
+            box obBox = na
+            label obLabel = na
+            if showLines
+                topLine := line.new(leftIdx, topVal, leftIdx + stubLenBars, topVal, extend=extend.none, width=1, color=lineColor)
+                bottomLine := line.new(leftIdx, bottomVal, leftIdx + stubLenBars, bottomVal, extend=extend.none, width=1, color=lineColor)
+            if showOBBox
+                obBox := box.new(leftIdx, topVal, leftIdx + stubLenBars, bottomVal, bgcolor=color.new(boxColor, 85), border_color=color.new(lineColor, 0))
+            if showLabels
+                string lblTxt = isBull ? "Bull OB" : "Bear OB"
+                float lblPrice = isBull ? topVal : bottomVal
+                obLabel := label.new(leftIdx, lblPrice, text=lblTxt, style=label.style_label_left, size=size.tiny, textcolor=color.white, color=color.new(boxColor, 0))
+            array.push(obDirs, direction)
+            array.push(obActive, true)
+            array.push(obMitigated, false)
+            array.push(obFromChoch, fromChoch)
+            array.push(obTops, topVal)
+            array.push(obBottoms, bottomVal)
+            array.push(obBodyTops, bodyTop)
+            array.push(obBodyBottoms, bodyBottom)
+            array.push(obLeftIdx, leftIdx)
+            array.push(obTopLines, topLine)
+            array.push(obBottomLines, bottomLine)
+            array.push(obBoxes, obBox)
+            array.push(obLabels, obLabel)
+            trimObArrays()
 
 if bosEvent
     registerOB(bosDir, chochEvent)
