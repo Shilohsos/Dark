@@ -69,9 +69,9 @@ float atrValue = ta.atr(atrLen)
 float atrAvg = ta.sma(atrValue, atrLen)
 float rsiValue = ta.rsi(close, rsiLen)
 bool useHTF = tfHTF != ""
-float hSMA = na
-if useHTF
-    hSMA := request.security(syminfo.tickerid, tfHTF, ta.sma(close, 200), barmerge.gaps_on, barmerge.lookahead_off)
+string tfResolved = useHTF ? tfHTF : timeframe.period
+float hSMARequest = request.security(syminfo.tickerid, tfResolved, ta.sma(close, 200), barmerge.gaps_on, barmerge.lookahead_off)
+float hSMA = useHTF ? hSMARequest : na
 
 var int trendDir = 0
 var bool prevBullBreak = false
