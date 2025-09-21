@@ -67,6 +67,13 @@ if barstate.isconfirmed
             else
                 break
 
+    while array.size(swingHighVals) > 3 and array.size(swingHighIdx) > 0
+        array.shift(swingHighVals)
+        array.shift(swingHighIdx)
+    while array.size(swingLowVals) > 3 and array.size(swingLowIdx) > 0
+        array.shift(swingLowVals)
+        array.shift(swingLowIdx)
+
 lastHH = array.size(swingHighVals) > 0 ? array.get(swingHighVals, array.size(swingHighVals) - 1) : na
 lastHHIndex = array.size(swingHighIdx) > 0 ? array.get(swingHighIdx, array.size(swingHighIdx) - 1) : na
 lastLL = array.size(swingLowVals) > 0 ? array.get(swingLowVals, array.size(swingLowVals) - 1) : na
@@ -86,6 +93,24 @@ var bool prevBullBreak = false
 var bool prevBearBreak = false
 var line[] bosLines = array.new_line()
 var label[] bosLabels = array.new_label()
+var string lastBosText = "None"
+var color lastBosColor = color.new(color.gray, 70)
+var string lastChochText = "None"
+var color lastChochColor = color.new(color.gray, 70)
+var string lastSignalText = "None"
+var color lastSignalColor = color.new(color.gray, 70)
+var table dashTable = na
+
+f_trim_structures() =>
+    int maxStructures = math.max(5, maxBoxes * 2)
+    while array.size(bosLines) > maxStructures
+        line ln = array.shift(bosLines)
+        if not na(ln)
+            line.delete(ln)
+    while array.size(bosLabels) > maxStructures
+        label lb = array.shift(bosLabels)
+        if not na(lb)
+            label.delete(lb)
 
 bosSourceBull = closeOnly ? close : bosWickOK ? high : close
 bosSourceBear = closeOnly ? close : bosWickOK ? low : close
@@ -120,13 +145,36 @@ if bosEvent
     chochEvent := (trendDir == -bosDir and trendDir != 0)
     trendDir := bosDir
 
+    lastBosText := bosDir == 1 ? "Bullish BOS" : "Bearish BOS"
+    lastBosColor := bosDir == 1 ? color.new(color.green, 60) : color.new(color.red, 60)
+    if chochEvent
+        lastChochText := bosDir == 1 ? "Bullish CHOCH" : "Bearish CHOCH"
+        lastChochColor := bosDir == 1 ? color.new(color.green, 40) : color.new(color.red, 40)
+
     if showLines and not na(bosSwingIndex) and not na(bosLevel)
-        line l = line.new(bosSwingIndex, bosLevel, bar_index, bosLevel, extend=extend.right, color=chochEvent ? chochColor : bosColor, width=1)
+        line l = line.new(bosSwingIndex, bosLevel, bar_index, bosLevel, extend=extend.none, color=chochEvent ? chochColor : bosColor, width=2)
         array.push(bosLines, l)
     if showLabels and not na(bosLevel)
         string txt = bosDir == 1 ? (chochEvent ? "CHOCH ↑" : "BOS ↑") : (chochEvent ? "CHOCH ↓" : "BOS ↓")
-        label lbl = label.new(bar_index, bosDir == 1 ? high : low, txt, style=bosDir == 1 ? label.style_label_down : label.style_label_up, color=chochEvent ? chochColor : bosColor, textcolor=color.white)
+        float labelOffset = not na(atrValue) ? atrValue * 0.35 : (high - low) * 0.5
+        float labelPrice = bosDir == 1 ? high + labelOffset : low - labelOffset
+        label lbl = label.new(bar_index, labelPrice, txt, style=bosDir == 1 ? label.style_label_down : label.style_label_up, color=chochEvent ? chochColor : bosColor, textcolor=color.white)
         array.push(bosLabels, lbl)
+
+    f_trim_structures()
+
+if showLines
+    int structureCount = array.size(bosLines)
+    if structureCount > 0
+        for i = 0 to structureCount - 1
+            line ln = array.get(bosLines, i)
+            line.set_x2(ln, bar_index)
+if not showLabels and array.size(bosLabels) > 0
+    for i = 0 to array.size(bosLabels) - 1
+        label lbl = array.get(bosLabels, i)
+        if not na(lbl)
+            label.delete(lbl)
+    array.clear(bosLabels)
 
 //=== Order Blocks ===//
 var box[] obBoxes = array.new_box()
@@ -160,6 +208,7 @@ f_trim_boxes() =>
         array.shift(obMitigated)
         array.shift(obFromChoch)
 
+
 f_register_ob(int direction, bool fromChoch) =>
     if direction == 1 and (obType == "both" or obType == "bullish")
         float top = na
@@ -185,8 +234,8 @@ f_register_ob(int direction, bool fromChoch) =>
             idx := bi
             break
         if not na(top) and not na(bottom) and not na(idx)
-            box bNew = box.new(idx, top, bar_index, bottom, bgcolor=color.new(bullObColor, showBoxes ? 0 : 100), border_color=color.new(color.green, 0))
-            label lNew = showLabels ? label.new(idx, top, "Bull OB", color=color.new(color.green, 0), textcolor=color.white, style=label.style_label_left) : na
+            box bNew = box.new(idx, top, bar_index, bottom, bgcolor=color.new(bullObColor, showBoxes ? 0 : 100), border_color=color.new(color.green, 40))
+            label lNew = showLabels ? label.new(idx, top, "Bull OB", color=color.new(color.green, 20), textcolor=color.white, style=label.style_label_left) : na
             array.push(obBoxes, bNew)
             array.push(obLabels, lNew)
             array.push(obDirs, 1)
@@ -218,8 +267,8 @@ f_register_ob(int direction, bool fromChoch) =>
             idx := bi
             break
         if not na(top) and not na(bottom) and not na(idx)
-            box bNew = box.new(idx, top, bar_index, bottom, bgcolor=color.new(bearObColor, showBoxes ? 0 : 100), border_color=color.new(color.red, 0))
-            label lNew = showLabels ? label.new(idx, bottom, "Bear OB", color=color.new(color.red, 0), textcolor=color.white, style=label.style_label_left) : na
+            box bNew = box.new(idx, top, bar_index, bottom, bgcolor=color.new(bearObColor, showBoxes ? 0 : 100), border_color=color.new(color.red, 40))
+            label lNew = showLabels ? label.new(idx, bottom, "Bear OB", color=color.new(color.red, 20), textcolor=color.white, style=label.style_label_left) : na
             array.push(obBoxes, bNew)
             array.push(obLabels, lNew)
             array.push(obDirs, -1)
@@ -261,8 +310,11 @@ f_pass_filters(bool isLong) =>
         pass := pass and (barstate.isconfirmed ? htfOk : false)
     pass
 
+int activeBullCount = 0
+int activeBearCount = 0
+int obCount = f_ob_count()
+
 if barstate.isconfirmed
-    int obCount = f_ob_count()
     if obCount > 0
         for i = 0 to obCount - 1
             if not array.get(obActive, i)
@@ -274,7 +326,7 @@ if barstate.isconfirmed
             float bottom = box.get_bottom(bRef)
             box.set_right(bRef, bar_index)
             box.set_bgcolor(bRef, color.new(dir == 1 ? bullObColor : bearObColor, showBoxes ? 0 : 100))
-            box.set_border_color(bRef, color.new(dir == 1 ? color.green : color.red, showBoxes ? 0 : 100))
+            box.set_border_color(bRef, color.new(dir == 1 ? color.green : color.red, showBoxes ? 30 : 100))
             label lbRef = array.get(obLabels, i)
             if not na(lbRef)
                 label.set_x(lbRef, box.get_left(bRef))
@@ -311,12 +363,77 @@ if barstate.isconfirmed
                             shortSignal := true
             if newMitigation and not na(lbRef)
                 label.set_text(lbRef, dir == 1 ? "Bull OB✓" : "Bear OB✓")
-                label.set_color(lbRef, color.new(color.yellow, 0))
+                label.set_color(lbRef, color.new(color.yellow, 20))
                 label.set_textcolor(lbRef, color.black)
             if invalid and not na(lbRef)
                 label.set_text(lbRef, dir == 1 ? "Bull OB✕" : "Bear OB✕")
-                label.set_color(lbRef, color.new(color.gray, 0))
+                label.set_color(lbRef, color.new(color.gray, 20))
                 label.set_textcolor(lbRef, color.black)
+
+    if obCount > 0
+        for i = 0 to obCount - 1
+            if array.get(obActive, i)
+                if array.get(obDirs, i) == 1
+                    activeBullCount += 1
+                else if array.get(obDirs, i) == -1
+                    activeBearCount += 1
+
+    if longSignal and shortSignal
+        lastSignalText := "Long & Short"
+        lastSignalColor := color.new(color.orange, 40)
+    else if longSignal
+        lastSignalText := "Long Entry"
+        lastSignalColor := color.new(color.green, 40)
+    else if shortSignal
+        lastSignalText := "Short Entry"
+        lastSignalColor := color.new(color.red, 40)
+    else if mitigatedSignal
+        lastSignalText := "OB Mitigated"
+        lastSignalColor := color.new(color.yellow, 30)
+
+if not showLabels and obCount > 0
+    for i = 0 to obCount - 1
+        label lbHide = array.get(obLabels, i)
+        if not na(lbHide)
+            label.delete(lbHide)
+            array.set(obLabels, i, na)
+
+string trendText = trendDir == 1 ? "BULLISH" : trendDir == -1 ? "BEARISH" : "NEUTRAL"
+color trendColor = trendDir == 1 ? color.new(color.green, 60) : trendDir == -1 ? color.new(color.red, 60) : color.new(color.gray, 70)
+string bosText = lastBosText
+color bosColorCell = lastBosColor
+string chochText = lastChochText
+color chochColorCell = lastChochColor
+string signalText = lastSignalText
+color signalColorCell = lastSignalColor
+string obSummary = str.format("{0} Bull / {1} Bear", activeBullCount, activeBearCount)
+color obSummaryColor = color.new(color.blue, 70)
+if activeBullCount + activeBearCount == 0
+    obSummaryColor := color.new(color.gray, 70)
+string htfText = useHTF ? (not na(hSMA) ? (close > hSMA ? "Above HTF SMA" : close < hSMA ? "Below HTF SMA" : "On HTF SMA") : "HTF SMA n/a") : "Filter off"
+color htfColorCell = useHTF ? (not na(hSMA) ? (close > hSMA ? color.new(color.green, 50) : color.new(color.red, 50)) : color.new(color.orange, 50)) : color.new(color.gray, 70)
+
+f_set_table_cell(table tbl, int column, int row, string txt, color bg, color txtColor) =>
+    if not na(tbl)
+        table.cell(tbl, column, row, txt, text_color=txtColor, bgcolor=bg)
+
+f_set_table_row(string title, string value, color valueBg, color valueTxt, int row) =>
+    if not na(dashTable)
+        f_set_table_cell(dashTable, 0, row, title, color.new(color.black, 80), color.white)
+        f_set_table_cell(dashTable, 1, row, value, valueBg, valueTxt)
+
+if showDashboard
+    if na(dashTable)
+        dashTable := table.new(position.top_right, 2, 6, border_width=1, border_color=color.new(color.gray, 70), frame_color=color.new(color.black, 85), frame_width=1)
+    f_set_table_row("Current Trend", trendText, trendColor, color.white, 0)
+    f_set_table_row("Last BOS", bosText, bosColorCell, color.white, 1)
+    f_set_table_row("Last CHOCH", chochText, chochColorCell, color.white, 2)
+    f_set_table_row("Active OBs", obSummary, obSummaryColor, color.white, 3)
+    f_set_table_row("Last Signal", signalText, signalColorCell, color.white, 4)
+    f_set_table_row("HTF Filter", htfText, htfColorCell, color.white, 5)
+else if not na(dashTable)
+    table.delete(dashTable)
+    dashTable := na
 
 //=== Plots ===//
 plot(lastHH, "Last HH", color=color.new(color.green, 40), linewidth=1)
