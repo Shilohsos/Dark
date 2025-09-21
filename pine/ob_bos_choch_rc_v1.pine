@@ -128,6 +128,17 @@ var bool[] obActive = array.new_bool()
 var bool[] obMitigated = array.new_bool()
 var bool[] obFromChoch = array.new_bool()
 
+f_min_int(int a, int b) => a < b ? a : b
+
+f_ob_count() =>
+    int count = array.size(obBoxes)
+    count := f_min_int(count, array.size(obLabels))
+    count := f_min_int(count, array.size(obDirs))
+    count := f_min_int(count, array.size(obActive))
+    count := f_min_int(count, array.size(obMitigated))
+    count := f_min_int(count, array.size(obFromChoch))
+    count
+
 f_trim_boxes() =>
     while array.size(obBoxes) > maxBoxes
         box b = array.shift(obBoxes)
@@ -210,14 +221,16 @@ f_register_ob(int direction, bool fromChoch) =>
             f_trim_boxes()
 
 if bosEvent
-    for i = 0 to array.size(obBoxes) - 1
-        if array.get(obActive, i) and array.get(obDirs, i) == -bosDir
-            box bRef = array.get(obBoxes, i)
-            label lbRef = array.get(obLabels, i)
-            array.set(obActive, i, false)
-            box.delete(bRef)
-            if not na(lbRef)
-                label.delete(lbRef)
+    int existingCount = f_ob_count()
+    if existingCount > 0
+        for i = 0 to existingCount - 1
+            if array.get(obActive, i) and array.get(obDirs, i) == -bosDir
+                box bRef = array.get(obBoxes, i)
+                label lbRef = array.get(obLabels, i)
+                array.set(obActive, i, false)
+                box.delete(bRef)
+                if not na(lbRef)
+                    label.delete(lbRef)
     f_register_ob(bosDir, chochEvent)
 
 //=== Signals ===//
@@ -241,59 +254,61 @@ f_pass_filters(bool isLong) =>
     pass
 
 if barstate.isconfirmed
-    for i = 0 to array.size(obBoxes) - 1
-        if not array.get(obActive, i)
-            continue
-        box bRef = array.get(obBoxes, i)
-        int dir = array.get(obDirs, i)
-        bool mitigated = array.get(obMitigated, i)
-        float top = box.get_top(bRef)
-        float bottom = box.get_bottom(bRef)
-        box.set_right(bRef, bar_index)
-        box.set_bgcolor(bRef, color.new(dir == 1 ? bullObColor : bearObColor, showBoxes ? 0 : 100))
-        box.set_border_color(bRef, color.new(dir == 1 ? color.green : color.red, showBoxes ? 0 : 100))
-        label lbRef = array.get(obLabels, i)
-        if not na(lbRef)
-            label.set_x(lbRef, box.get_left(bRef))
-        bool invalid = false
-        bool newMitigation = false
-        if dir == 1
-            if close < bottom
-                invalid := true
-            else if not mitigated and low <= top and close >= top
-                newMitigation := true
-        else if dir == -1
-            if close > top
-                invalid := true
-            else if not mitigated and high >= bottom and close <= bottom
-                newMitigation := true
-        if invalid
-            array.set(obActive, i, false)
-            box.delete(bRef)
+    int obCount = f_ob_count()
+    if obCount > 0
+        for i = 0 to obCount - 1
+            if not array.get(obActive, i)
+                continue
+            box bRef = array.get(obBoxes, i)
+            int dir = array.get(obDirs, i)
+            bool mitigated = array.get(obMitigated, i)
+            float top = box.get_top(bRef)
+            float bottom = box.get_bottom(bRef)
+            box.set_right(bRef, bar_index)
+            box.set_bgcolor(bRef, color.new(dir == 1 ? bullObColor : bearObColor, showBoxes ? 0 : 100))
+            box.set_border_color(bRef, color.new(dir == 1 ? color.green : color.red, showBoxes ? 0 : 100))
+            label lbRef = array.get(obLabels, i)
             if not na(lbRef)
-                label.delete(lbRef)
-        else
-            if newMitigation
-                array.set(obMitigated, i, true)
-                mitigatedSignal := true
-                if dir == 1 and f_pass_filters(true)
-                    if array.get(obFromChoch, i)
-                        longSignal := true
-                    else if trendDir == 1
-                        longSignal := true
-                if dir == -1 and f_pass_filters(false)
-                    if array.get(obFromChoch, i)
-                        shortSignal := true
-                    else if trendDir == -1
-                        shortSignal := true
-        if newMitigation and not na(lbRef)
-            label.set_text(lbRef, dir == 1 ? "Bull OB✓" : "Bear OB✓")
-            label.set_color(lbRef, color.new(color.yellow, 0))
-            label.set_textcolor(lbRef, color.black)
-        if invalid and not na(lbRef)
-            label.set_text(lbRef, dir == 1 ? "Bull OB✕" : "Bear OB✕")
-            label.set_color(lbRef, color.new(color.gray, 0))
-            label.set_textcolor(lbRef, color.black)
+                label.set_x(lbRef, box.get_left(bRef))
+            bool invalid = false
+            bool newMitigation = false
+            if dir == 1
+                if close < bottom
+                    invalid := true
+                else if not mitigated and low <= top and close >= top
+                    newMitigation := true
+            else if dir == -1
+                if close > top
+                    invalid := true
+                else if not mitigated and high >= bottom and close <= bottom
+                    newMitigation := true
+            if invalid
+                array.set(obActive, i, false)
+                box.delete(bRef)
+                if not na(lbRef)
+                    label.delete(lbRef)
+            else
+                if newMitigation
+                    array.set(obMitigated, i, true)
+                    mitigatedSignal := true
+                    if dir == 1 and f_pass_filters(true)
+                        if array.get(obFromChoch, i)
+                            longSignal := true
+                        else if trendDir == 1
+                            longSignal := true
+                    if dir == -1 and f_pass_filters(false)
+                        if array.get(obFromChoch, i)
+                            shortSignal := true
+                        else if trendDir == -1
+                            shortSignal := true
+            if newMitigation and not na(lbRef)
+                label.set_text(lbRef, dir == 1 ? "Bull OB✓" : "Bear OB✓")
+                label.set_color(lbRef, color.new(color.yellow, 0))
+                label.set_textcolor(lbRef, color.black)
+            if invalid and not na(lbRef)
+                label.set_text(lbRef, dir == 1 ? "Bull OB✕" : "Bear OB✕")
+                label.set_color(lbRef, color.new(color.gray, 0))
+                label.set_textcolor(lbRef, color.black)
 
 //=== Plots ===//
 plot(lastHH, "Last HH", color=color.new(color.green, 40), linewidth=1)
