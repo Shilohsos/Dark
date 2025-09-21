@@ -422,35 +422,47 @@ f_pass_filters(bool isLong) =>
         pass := pass and (barstate.isconfirmed ? htfOk : false)
     pass
 
-f_reset_line(line ln) =>
-    line result = ln
-    if line.exists(result)
-        line.delete(result)
-    result := na
-    result
-
-f_reset_label(label lb) =>
-    label result = lb
-    if label.exists(result)
-        label.delete(result)
-    result := na
-    result
-
 f_clear_trade(bool isLong) =>
     if isLong
-        longSLLine := f_reset_line(longSLLine)
-        longTP1Line := f_reset_line(longTP1Line)
-        longTP2Line := f_reset_line(longTP2Line)
-        longSLLabel := f_reset_label(longSLLabel)
-        longTP1Label := f_reset_label(longTP1Label)
-        longTP2Label := f_reset_label(longTP2Label)
+        if not na(longSLLine)
+            line.delete(longSLLine)
+        if not na(longTP1Line)
+            line.delete(longTP1Line)
+        if not na(longTP2Line)
+            line.delete(longTP2Line)
+        if not na(longSLLabel)
+            label.delete(longSLLabel)
+        if not na(longTP1Label)
+            label.delete(longTP1Label)
+        if not na(longTP2Label)
+            label.delete(longTP2Label)
+
+        longSLLine  := na
+        longTP1Line := na
+        longTP2Line := na
+        longSLLabel := na
+        longTP1Label := na
+        longTP2Label := na
     else
-        shortSLLine := f_reset_line(shortSLLine)
-        shortTP1Line := f_reset_line(shortTP1Line)
-        shortTP2Line := f_reset_line(shortTP2Line)
-        shortSLLabel := f_reset_label(shortSLLabel)
-        shortTP1Label := f_reset_label(shortTP1Label)
-        shortTP2Label := f_reset_label(shortTP2Label)
+        if not na(shortSLLine)
+            line.delete(shortSLLine)
+        if not na(shortTP1Line)
+            line.delete(shortTP1Line)
+        if not na(shortTP2Line)
+            line.delete(shortTP2Line)
+        if not na(shortSLLabel)
+            label.delete(shortSLLabel)
+        if not na(shortTP1Label)
+            label.delete(shortTP1Label)
+        if not na(shortTP2Label)
+            label.delete(shortTP2Label)
+
+        shortSLLine  := na
+        shortTP1Line := na
+        shortTP2Line := na
+        shortSLLabel := na
+        shortTP1Label := na
+        shortTP2Label := na
 
 f_draw_entry(bool isLong, float stopPrice, float tp1Price, float tp2Price) =>
     f_clear_trade(isLong)
@@ -495,115 +507,119 @@ if barstate.isconfirmed
         for i = 0 to obCount - 1
             if not array.get(obActive, i)
                 continue
-            int dir = array.get(obDirs, i)
-            bool mitigated = array.get(obMitigated, i)
-            float topVal = array.get(obTopVals, i)
+            int   dir       = array.get(obDirs, i)
+            bool  mitigated = array.get(obMitigated, i)
+            float topVal    = array.get(obTopVals, i)
             float bottomVal = array.get(obBottomVals, i)
-            float bodyEdge = array.get(obBodyEdgeVals, i)
-            int leftIdx = array.get(obLeftIdx, i)
-            box bRef = array.get(obBoxes, i)
-            line topLineRef = array.get(obTopLines, i)
-            line bottomLineRef = array.get(obBottomLines, i)
-            label lbRef = array.get(obLabels, i)
-            float boxTop = dir == 1 ? topVal : bodyEdge
+            float bodyEdge  = array.get(obBodyEdgeVals, i)
+            int   leftIdx   = array.get(obLeftIdx, i)
+            box   bRef      = array.get(obBoxes, i)
+            line  topLineRef    = array.get(obTopLines, i)
+            line  bottomLineRef = array.get(obBottomLines, i)
+            label lbRef     = array.get(obLabels, i)
+            float boxTop    = dir == 1 ? topVal   : bodyEdge
             float boxBottom = dir == 1 ? bodyEdge : bottomVal
             color obLineColor = dir == 1 ? color.new(color.green, 0) : color.new(color.red, 0)
 
-        if showOBBox
-            if not box.exists(bRef)
-                bRef := box.new(leftIdx, boxTop, leftIdx, boxBottom, bgcolor=color.new(dir == 1 ? bullObColor : bearObColor, 90), border_color=obLineColor)
-                array.set(obBoxes, i, bRef)
-            if box.exists(bRef)
-                box.set_left(bRef, leftIdx)
-                box.set_top(bRef, boxTop)
-                box.set_bottom(bRef, boxBottom)
-                box.set_right(bRef, bar_index)
-                box.set_bgcolor(bRef, color.new(dir == 1 ? bullObColor : bearObColor, 90))
-                box.set_border_color(bRef, obLineColor)
-                box.set_border_width(bRef, 1)
-        else if box.exists(bRef)
-            box.delete(bRef)
-            array.set(obBoxes, i, na)
-
-        if showLines
-            if not line.exists(topLineRef) and not na(topVal)
-                topLineRef := line.new(bar_index, topVal, bar_index + stubLenBars, topVal, extend=extend.none, width=1, color=obLineColor)
-                array.set(obTopLines, i, topLineRef)
-            if line.exists(topLineRef)
-                line.set_x1(topLineRef, bar_index)
-                line.set_x2(topLineRef, bar_index + stubLenBars)
-                line.set_y1(topLineRef, topVal)
-                line.set_y2(topLineRef, topVal)
-            if not line.exists(bottomLineRef) and not na(bottomVal)
-                bottomLineRef := line.new(bar_index, bottomVal, bar_index + stubLenBars, bottomVal, extend=extend.none, width=1, color=obLineColor)
-                array.set(obBottomLines, i, bottomLineRef)
-            if line.exists(bottomLineRef)
-                line.set_x1(bottomLineRef, bar_index)
-                line.set_x2(bottomLineRef, bar_index + stubLenBars)
-                line.set_y1(bottomLineRef, bottomVal)
-                line.set_y2(bottomLineRef, bottomVal)
-        else
-            if line.exists(topLineRef)
-                line.delete(topLineRef)
-                array.set(obTopLines, i, na)
-            if line.exists(bottomLineRef)
-                line.delete(bottomLineRef)
-                array.set(obBottomLines, i, na)
-
-        if label.exists(lbRef)
-            label.set_x(lbRef, leftIdx)
-            label.set_size(lbRef, size.tiny)
-        bool invalid = false
-        bool newMitigation = false
-        if dir == 1
-            if close < bottomVal
-                invalid := true
-            else if not mitigated and low <= topVal and close >= topVal
-                newMitigation := true
-        else if dir == -1
-            if close > topVal
-                invalid := true
-            else if not mitigated and high >= bottomVal and close <= bottomVal
-                newMitigation := true
-        if invalid
-            array.set(obActive, i, false)
-            if box.exists(bRef)
+            // --- OB box draw/update ---
+            if showOBBox
+                if not box.exists(bRef)
+                    bRef := box.new(leftIdx, boxTop, leftIdx, boxBottom,
+                                    bgcolor=color.new(dir == 1 ? bullObColor : bearObColor, 90),
+                                    border_color=obLineColor)
+                    array.set(obBoxes, i, bRef)
+                if box.exists(bRef)
+                    box.set_left(bRef, leftIdx)
+                    box.set_top(bRef, boxTop)
+                    box.set_bottom(bRef, boxBottom)
+                    box.set_right(bRef, bar_index)
+                    box.set_bgcolor(bRef, color.new(dir == 1 ? bullObColor : bearObColor, 90))
+                    box.set_border_color(bRef, obLineColor)
+                    box.set_border_width(bRef, 1)
+            else if box.exists(bRef)
                 box.delete(bRef)
                 array.set(obBoxes, i, na)
-            if line.exists(topLineRef)
-                line.delete(topLineRef)
-                array.set(obTopLines, i, na)
-            if line.exists(bottomLineRef)
-                line.delete(bottomLineRef)
-                array.set(obBottomLines, i, na)
+
+            // --- OB lines draw/update ---
+            if showLines
+                if not line.exists(topLineRef) and not na(topVal)
+                    topLineRef := line.new(bar_index, topVal, bar_index + stubLenBars, topVal, extend=extend.none, width=1, color=obLineColor)
+                    array.set(obTopLines, i, topLineRef)
+                if line.exists(topLineRef)
+                    line.set_x1(topLineRef, bar_index)
+                    line.set_x2(topLineRef, bar_index + stubLenBars)
+                    line.set_y1(topLineRef, topVal)
+                    line.set_y2(topLineRef, topVal)
+                if not line.exists(bottomLineRef) and not na(bottomVal)
+                    bottomLineRef := line.new(bar_index, bottomVal, bar_index + stubLenBars, bottomVal, extend=extend.none, width=1, color=obLineColor)
+                    array.set(obBottomLines, i, bottomLineRef)
+                if line.exists(bottomLineRef)
+                    line.set_x1(bottomLineRef, bar_index)
+                    line.set_x2(bottomLineRef, bar_index + stubLenBars)
+                    line.set_y1(bottomLineRef, bottomVal)
+                    line.set_y2(bottomLineRef, bottomVal)
             else
-                if newMitigation
-                    array.set(obMitigated, i, true)
-                    mitigatedSignal := true
-                    bool triggeredLong = false
-                    bool triggeredShort = false
-                    if dir == 1 and f_pass_filters(true)
-                        if array.get(obFromChoch, i)
-                            longSignal := true
-                            triggeredLong := true
-                        else if trendDir == 1
-                            longSignal := true
-                            triggeredLong := true
-                    if dir == -1 and f_pass_filters(false)
-                        if array.get(obFromChoch, i)
-                            shortSignal := true
-                            triggeredShort := true
-                        else if trendDir == -1
-                            shortSignal := true
-                            triggeredShort := true
-                    if triggeredLong and na(newLongStop)
-                        newLongStop := bottomVal
-                    if triggeredShort and na(newShortStop)
-                        newShortStop := topVal
-            if newMitigation and label.exists(lbRef)
-                label.set_text(lbRef, dir == 1 ? "Bull OB✓" : "Bear OB✓")
-                label.set_color(lbRef, color.new(color.yellow, 20))
-                label.set_textcolor(lbRef, color.black)
+                if line.exists(topLineRef)
+                    line.delete(topLineRef)
+                    array.set(obTopLines, i, na)
+                if line.exists(bottomLineRef)
+                    line.delete(bottomLineRef)
+                    array.set(obBottomLines, i, na)
+
+            // --- Label update ---
+            if label.exists(lbRef)
+                label.set_x(lbRef, leftIdx)
+                label.set_size(lbRef, size.tiny)
+
+            // --- Invalidation / Mitigation checks ---
+            bool invalid = false
+            bool newMitigation = false
+            if dir == 1
+                if close < bottomVal
+                    invalid := true
+                else if not mitigated and low <= topVal and close >= topVal
+                    newMitigation := true
+            else if dir == -1
+                if close > topVal
+                    invalid := true
+                else if not mitigated and high >= bottomVal and close <= bottomVal
+                    newMitigation := true
+
+            if invalid
+                array.set(obActive, i, false)
+                if box.exists(bRef)
+                    box.delete(bRef)
+                    array.set(obBoxes, i, na)
+                if line.exists(topLineRef)
+                    line.delete(topLineRef)
+                    array.set(obTopLines, i, na)
+                if line.exists(bottomLineRef)
+                    line.delete(bottomLineRef)
+                    array.set(obBottomLines, i, na)
+            else if newMitigation
+                array.set(obMitigated, i, true)
+                mitigatedSignal := true
+
+                bool triggeredLong = false
+                bool triggeredShort = false
+                if dir == 1 and f_pass_filters(true)
+                    if array.get(obFromChoch, i) or trendDir == 1
+                        longSignal := true
+                        triggeredLong := true
+                if dir == -1 and f_pass_filters(false)
+                    if array.get(obFromChoch, i) or trendDir == -1
+                        shortSignal := true
+                        triggeredShort := true
+                if triggeredLong and na(newLongStop)
+                    newLongStop := bottomVal
+                if triggeredShort and na(newShortStop)
+                    newShortStop := topVal
+
+                if label.exists(lbRef)
+                    label.set_text(lbRef, dir == 1 ? "Bull OB✓" : "Bear OB✓")
+                    label.set_color(lbRef, color.new(color.yellow, 20))
+                    label.set_textcolor(lbRef, color.black)
+
             if invalid and label.exists(lbRef)
                 label.set_text(lbRef, dir == 1 ? "Bull OB✕" : "Bear OB✕")
                 label.set_color(lbRef, color.new(color.gray, 20))
