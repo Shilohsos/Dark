@@ -680,11 +680,9 @@ if barstate.isconfirmed
             longTp1Triggered := false
             longTp2Triggered := false
             longSlTriggered := false
-            [longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label] =
-                f_clear_trade(longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label)
+            [longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label] = f_clear_trade(longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label)
             if showSLTP
-                [longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label] =
-                    f_draw_entry(true, longStop, longTp1, longTp2, stubLenBars)
+                [longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label] = f_draw_entry(true, longStop, longTp1, longTp2, stubLenBars)
         else
             longActiveTrade := false
             longEntryPrice := na
@@ -695,8 +693,7 @@ if barstate.isconfirmed
             longTp1Triggered := false
             longTp2Triggered := false
             longSlTriggered := false
-            [longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label] =
-                f_clear_trade(longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label)
+            [longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label] = f_clear_trade(longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label)
 
     if shortSignal
         float stopCandidate = not na(newShortStop) ? newShortStop : (not na(lastHH) ? lastHH : high)
@@ -712,11 +709,9 @@ if barstate.isconfirmed
             shortTp1Triggered := false
             shortTp2Triggered := false
             shortSlTriggered := false
-            [shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label] =
-                f_clear_trade(shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label)
+            [shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label] = f_clear_trade(shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label)
             if showSLTP
-                [shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label] =
-                    f_draw_entry(false, shortStop, shortTp1, shortTp2, stubLenBars)
+                [shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label] = f_draw_entry(false, shortStop, shortTp1, shortTp2, stubLenBars)
         else
             shortActiveTrade := false
             shortEntryPrice := na
@@ -727,8 +722,7 @@ if barstate.isconfirmed
             shortTp1Triggered := false
             shortTp2Triggered := false
             shortSlTriggered := false
-            [shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label] =
-                f_clear_trade(shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label)
+            [shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label] = f_clear_trade(shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label)
 
     if longActiveTrade and not na(longEntryBar) and bar_index > longEntryBar
         bool stopHit = false
@@ -737,15 +731,13 @@ if barstate.isconfirmed
             longActiveTrade := false
             slHitEvent = true
             stopHit = true
-            [longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label] =
-                f_clear_trade(longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label)
+            [longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label] = f_clear_trade(longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label)
         if not stopHit
             if not longTp2Triggered and high >= longTp2
                 longTp2Triggered := true
                 longActiveTrade := false
                 tp2HitEvent = true
-                [longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label] =
-                    f_clear_trade(longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label)
+                [longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label] = f_clear_trade(longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label)
             if not longTp1Triggered and high >= longTp1
                 longTp1Triggered := true
                 tp1HitEvent = true
@@ -757,31 +749,25 @@ if barstate.isconfirmed
             shortActiveTrade := false
             slHitEvent = true
             stopHit = true
-            [shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label] =
-                f_clear_trade(shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label)
+            [shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label] = f_clear_trade(shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label)
         if not stopHit
             if not shortTp2Triggered and low <= shortTp2
                 shortTp2Triggered := true
                 shortActiveTrade := false
                 tp2HitEvent = true
-                [shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label] =
-                    f_clear_trade(shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label)
+                [shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label] = f_clear_trade(shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label)
             if not shortTp1Triggered and low <= shortTp1
                 shortTp1Triggered := true
                 tp1HitEvent = true
 
     if not showSLTP
-        [longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label] =
-            f_clear_trade(longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label)
-        [shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label] =
-            f_clear_trade(shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label)
+        [longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label] = f_clear_trade(longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label)
+        [shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label] = f_clear_trade(shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label)
     else
         if longActiveTrade and not isLine(longSLLine) and not na(longStop) and not na(longTp1) and not na(longTp2)
-            [longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label] =
-                f_draw_entry(true, longStop, longTp1, longTp2, stubLenBars)
+            [longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label] = f_draw_entry(true, longStop, longTp1, longTp2, stubLenBars)
         if shortActiveTrade and not isLine(shortSLLine) and not na(shortStop) and not na(shortTp1) and not na(shortTp2)
-            [shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label] =
-                f_draw_entry(false, shortStop, shortTp1, shortTp2, stubLenBars)
+            [shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label] = f_draw_entry(false, shortStop, shortTp1, shortTp2, stubLenBars)
         if longActiveTrade and isLine(longSLLine)
             int longStart = na(longEntryBar) ? bar_index : longEntryBar
             int longEnd = longStart + stubLenBars
