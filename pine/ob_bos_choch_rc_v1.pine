@@ -40,33 +40,33 @@ color bearObColor = input.color(color.new(color.red, 70), "bearObColor", group=g
 int stubLenBars = input.int(3, "Line length (bars)", minval=1, maxval=10, group=groupVisuals)
 
 //=== Utility Helpers ===//
-bool isLine(line id) => not na(id)
-bool isLabel(label id) => not na(id)
-bool isBox(box id) => not na(id)
+isLine(line id) => not na(id)
+isLabel(label id) => not na(id)
+isBox(box id) => not na(id)
 
-void deleteLine(line id) =>
+deleteLine(line id) =>
     if isLine(id)
         line.delete(id)
 
-void deleteLabel(label id) =>
+deleteLabel(label id) =>
     if isLabel(id)
         label.delete(id)
 
-void deleteBox(box id) =>
+deleteBox(box id) =>
     if isBox(id)
         box.delete(id)
 
-void trimLines(line[] arr, int maxCount) =>
+trimLines(line[] arr, int maxCount) =>
     while array.size(arr) > maxCount
         line oldId = array.shift(arr)
         deleteLine(oldId)
 
-void trimLabels(label[] arr, int maxCount) =>
+trimLabels(label[] arr, int maxCount) =>
     while array.size(arr) > maxCount
         label oldId = array.shift(arr)
         deleteLabel(oldId)
 
-void trimBoxes(box[] arr, int maxCount) =>
+trimBoxes(box[] arr, int maxCount) =>
     while array.size(arr) > maxCount
         box oldId = array.shift(arr)
         deleteBox(oldId)
@@ -113,9 +113,15 @@ float atrValue = ta.atr(atrLen)
 float atrSma = ta.sma(atrValue, atrLen)
 float rsiValue = ta.rsi(close, rsiLen)
 bool useHTF = tfHTF != ""
-string tfResolved = useHTF ? tfHTF : timeframe.period
-float htfSmaRaw = request.security(syminfo.tickerid, tfResolved, ta.sma(close, 200), barmerge.gaps_on, barmerge.lookahead_off)
-float htfSma = useHTF ? htfSmaRaw : na
+float htfSma = na
+if useHTF
+    htfSma := request.security(
+        syminfo.tickerid,
+        tfHTF,
+        ta.sma(close, 200),
+        barmerge.gaps_on,
+        barmerge.lookahead_off
+    )
 
 var int trendDir = 0
 var line[] bosLines = array.new_line()
@@ -125,7 +131,7 @@ var float lastBOSPrice = na
 var int lastCHOCHBar = na
 var float lastCHOCHPrice = na
 
-void plotStructureStub(float level, string title, color baseColor, int direction) =>
+plotStructureStub(float level, string title, color baseColor, int direction) =>
     if na(level)
         return
     if showLines
@@ -135,7 +141,16 @@ void plotStructureStub(float level, string title, color baseColor, int direction
         float offset = syminfo.mintick * 2.0
         float labelLevel = direction == 1 ? level + offset : level - offset
         int shift = math.max(1, stubLenBars)
-        label stubLabel = label.new(bar_index + shift, labelLevel, text=title, style=direction == 1 ? label.style_label_down : label.style_label_up, size=size.tiny, textcolor=color.white, color=color.new(baseColor, 0))
+        labelStyle = direction == 1 ? label.style_label_down : label.style_label_up
+        label stubLabel = label.new(
+            bar_index + shift,
+            labelLevel,
+            text=title,
+            style=labelStyle,
+            size=size.tiny,
+            textcolor=color.white,
+            color=color.new(baseColor, 0)
+        )
         array.push(bosLabels, stubLabel)
     trimLines(bosLines, 30)
     trimLabels(bosLabels, 30)
@@ -192,7 +207,7 @@ var float[] obBodyTops = array.new_float()
 var float[] obBodyBottoms = array.new_float()
 var int[] obLeftIdx = array.new_int()
 
-void trimObArrays() =>
+trimObArrays() =>
     while array.size(obDirs) > maxBoxes
         array.shift(obDirs)
         array.shift(obActive)
@@ -212,7 +227,7 @@ void trimObArrays() =>
         label removedLabel = array.shift(obLabels)
         deleteLabel(removedLabel)
 
-void registerOB(int direction, bool fromChoch) =>
+registerOB(int direction, bool fromChoch) =>
     if direction == 1 and not (obType == "both" or obType == "bullish")
         return
     if direction == -1 and not (obType == "both" or obType == "bearish")
@@ -233,8 +248,8 @@ void registerOB(int direction, bool fromChoch) =>
         bool isOpposing = direction == 1 ? c < o : c > o
         if not isOpposing
             continue
-        float range = h - l
-        float bodyPct = range == 0.0 ? 0.0 : math.abs(c - o) / range * 100.0
+        float candleRange = h - l
+        float bodyPct = candleRange == 0.0 ? 0.0 : math.abs(c - o) / candleRange * 100.0
         if bodyPct < obBodyPct
             continue
         topVal := h
@@ -313,7 +328,7 @@ var label shortSLLabel = na
 var label shortTP1Label = na
 var label shortTP2Label = na
 
-[line, line, line, label, label, label] clearTrade(line slLine, line tp1Line, line tp2Line, label slLabel, label tp1Label, label tp2Label) =>
+clearTrade(line slLine, line tp1Line, line tp2Line, label slLabel, label tp1Label, label tp2Label) =>
     deleteLine(slLine)
     deleteLine(tp1Line)
     deleteLine(tp2Line)
@@ -322,7 +337,7 @@ var label shortTP2Label = na
     deleteLabel(tp2Label)
     [na, na, na, na, na, na]
 
-[line, line, line, label, label, label] drawEntry(float stopPrice, float tp1Price, float tp2Price) =>
+drawEntry(float stopPrice, float tp1Price, float tp2Price) =>
     int x1 = bar_index
     int x2 = bar_index + stubLenBars
     color slColor = color.new(color.red, 0)
@@ -337,7 +352,7 @@ var label shortTP2Label = na
     label tp2Label = label.new(x2, tp2Price, text=tp2Text, style=label.style_label_right, size=size.tiny, textcolor=color.white, color=color.new(tpColor, 0))
     [slLine, tp1Line, tp2Line, slLabel, tp1Label, tp2Label]
 
-bool passFilters(bool isLong) =>
+passFilters(bool isLong) =>
     if confirmWith == "none"
         true
     else if confirmWith == "rsi"
@@ -345,7 +360,7 @@ bool passFilters(bool isLong) =>
     else
         atrValue > atrMin * atrSma
 
-bool htfAllows(bool isLong) =>
+htfAllows(bool isLong) =>
     if not useHTF or na(htfSma)
         true
     else
