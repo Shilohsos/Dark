@@ -144,6 +144,18 @@ f_trim_structures() =>
     f_trim_lines(bosLines, maxStructures)
     f_trim_labels(bosLabels, maxStructures)
 
+f_plot_structure_stub(float price, string text, color baseColor, int direction) =>
+    if not na(price)
+        if showLines
+            line stubLine = line.new(bar_index, price, bar_index + stubLenBars, price, extend=extend.none, color=baseColor, width=1)
+            array.push(bosLines, stubLine)
+        if showLabels
+            float offset = syminfo.mintick * 2.0
+            float labelPrice = direction == 1 ? price + offset : price - offset
+            int labelShift = math.max(1, int(math.round(stubLenBars * 0.5)))
+            label stubLabel = label.new(bar_index + labelShift, labelPrice, text, style=direction == 1 ? label.style_label_down : label.style_label_up, color=color.new(baseColor, 0), textcolor=color.white, size=size.tiny)
+            array.push(bosLabels, stubLabel)
+
 bosSourceBull = closeOnly ? close : bosWickOK ? high : close
 bosSourceBear = closeOnly ? close : bosWickOK ? low : close
 
@@ -178,28 +190,22 @@ if bosEvent
         lastChochColor := bosDir == 1 ? color.new(color.green, 40) : color.new(color.red, 40)
 
     float bosPrice = bosDir == 1 ? bosSourceBull : bosSourceBear
-    bool sameBOSPlace = not na(bosPrice) and ((bar_index == lastBOSBar) or (not na(lastBOSPrice) and math.abs(bosPrice - lastBOSPrice) <= syminfo.mintick * 4))
-    bool sameCHOCHPlace = chochEvent and not na(bosPrice) and ((bar_index == lastCHOCHBar) or (not na(lastCHOCHPrice) and math.abs(bosPrice - lastCHOCHPrice) <= syminfo.mintick * 4))
+    bool samePlace = (bar_index == lastBOSBar) or (not na(lastBOSPrice) and not na(bosPrice) and math.abs(bosPrice - lastBOSPrice) <= syminfo.mintick * 4)
+    bool samePlaceCh = (bar_index == lastCHOCHBar) or (not na(lastCHOCHPrice) and not na(bosPrice) and math.abs(bosPrice - lastCHOCHPrice) <= syminfo.mintick * 4)
 
-    if not sameBOSPlace and (not chochEvent or not sameCHOCHPlace)
-        if showLines and not na(bosPrice)
-            color lineColor = chochEvent ? chochColor : bosColor
-            line l = line.new(bar_index, bosPrice, bar_index + stubLenBars, bosPrice, extend=extend.none, color=lineColor, width=1)
-            array.push(bosLines, l)
-        if showLabels and not na(bosPrice)
-            string txt = chochEvent ? "CHOCH" : "BOS"
-            color labelBg = chochEvent ? chochColor : bosColor
-            float offset = syminfo.mintick * 2.0
-            float labelPrice = bosDir == 1 ? bosPrice + offset : bosPrice - offset
-            int labelShift = math.max(1, int(math.round(stubLenBars * 0.5)))
-            label lbl = label.new(bar_index + labelShift, labelPrice, txt, style=bosDir == 1 ? label.style_label_down : label.style_label_up, color=color.new(labelBg, 0), textcolor=color.white, size=size.tiny)
-            array.push(bosLabels, lbl)
-        lastBOSBar := bar_index
-        lastBOSPrice := bosPrice
-        if chochEvent
+    if chochEvent
+        if not samePlaceCh and not na(bosPrice)
+            f_plot_structure_stub(bosPrice, "CHOCH", chochColor, bosDir)
             lastCHOCHBar := bar_index
             lastCHOCHPrice := bosPrice
-
+            if not samePlace
+                lastBOSBar := bar_index
+                lastBOSPrice := bosPrice
+            f_trim_structures()
+    else if not samePlace and not na(bosPrice)
+        f_plot_structure_stub(bosPrice, "BOS", bosColor, bosDir)
+        lastBOSBar := bar_index
+        lastBOSPrice := bosPrice
         f_trim_structures()
 
 if not showLines and array.size(bosLines) > 0
