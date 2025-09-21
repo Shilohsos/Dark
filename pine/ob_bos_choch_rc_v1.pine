@@ -528,12 +528,12 @@ if barstate.isconfirmed
             if showOBBox
                 if not isBox(bRef)
                     bRef := box.new(
-                        left          = leftIdx,
-                        top           = boxTop,
-                        right         = bar_index + stubLenBars,
-                        bottom        = boxBottom,
-                        bgcolor       = color.new(dir == 1 ? bullObColor : bearObColor, 90),
-                        border_color  = obLineColor
+                        left         = leftIdx,
+                        top          = boxTop,
+                        right        = bar_index + stubLenBars,
+                        bottom       = boxBottom,
+                        bgcolor      = color.new(dir == 1 ? bullObColor : bearObColor, 90),
+                        border_color = obLineColor
                     )
                     array.set(obBoxes, i, bRef)
                 if isBox(bRef)
@@ -551,7 +551,15 @@ if barstate.isconfirmed
             // --- OB lines draw/update ---
             if showLines
                 if not isLine(topLineRef) and not na(topVal)
-                    topLineRef = line.new(bar_index, topVal, bar_index + stubLenBars, topVal, extend=extend.none, width=1, color=obLineColor)
+                    topLineRef := line.new(
+                        x1     = bar_index,
+                        y1     = topVal,
+                        x2     = bar_index + stubLenBars,
+                        y2     = topVal,
+                        extend = extend.none,
+                        width  = 1,
+                        color  = obLineColor
+                    )
                     array.set(obTopLines, i, topLineRef)
                 if isLine(topLineRef)
                     line.set_x1(topLineRef, bar_index)
@@ -559,7 +567,15 @@ if barstate.isconfirmed
                     line.set_y1(topLineRef, topVal)
                     line.set_y2(topLineRef, topVal)
                 if not isLine(bottomLineRef) and not na(bottomVal)
-                    bottomLineRef = line.new(bar_index, bottomVal, bar_index + stubLenBars, bottomVal, extend=extend.none, width=1, color=obLineColor)
+                    bottomLineRef := line.new(
+                        x1     = bar_index,
+                        y1     = bottomVal,
+                        x2     = bar_index + stubLenBars,
+                        y2     = bottomVal,
+                        extend = extend.none,
+                        width  = 1,
+                        color  = obLineColor
+                    )
                     array.set(obBottomLines, i, bottomLineRef)
                 if isLine(bottomLineRef)
                     line.set_x1(bottomLineRef, bar_index)
