@@ -13,8 +13,49 @@ plot(slowSma, title="Slow SMA", color=color.new(color.orange, 0), linewidth=2)
 longCondition = ta.crossover(fastSma, slowSma)
 shortCondition = ta.crossunder(fastSma, slowSma)
 
-plotshape(longCondition, title="Buy Signal", location=location.belowbar, color=color.new(color.green, 0), style=shape.labelup, text="Buy")
-plotshape(shortCondition, title="Sell Signal", location=location.abovebar, color=color.new(color.red, 0), style=shape.labeldown, text="Sell")
+slPercent = input.float(1.0, title="Stop Loss (%)", step=0.1, minval=0.0)
+tp1Percent = input.float(1.5, title="Take Profit 1 (%)", step=0.1, minval=0.0)
+tp2Percent = input.float(3.0, title="Take Profit 2 (%)", step=0.1, minval=0.0)
+
+var float activeLongEntry = na
+var float activeShortEntry = na
+
+if longCondition
+    activeLongEntry := close
+    activeShortEntry := na
+if shortCondition
+    activeShortEntry := close
+    activeLongEntry := na
+
+longStop = na
+longTp1 = na
+longTp2 = na
+if not na(activeLongEntry)
+    longStop := activeLongEntry * (1 - slPercent * 0.01)
+    longTp1 := activeLongEntry * (1 + tp1Percent * 0.01)
+    longTp2 := activeLongEntry * (1 + tp2Percent * 0.01)
+
+shortStop = na
+shortTp1 = na
+shortTp2 = na
+if not na(activeShortEntry)
+    shortStop := activeShortEntry * (1 + slPercent * 0.01)
+    shortTp1 := activeShortEntry * (1 - tp1Percent * 0.01)
+    shortTp2 := activeShortEntry * (1 - tp2Percent * 0.01)
+
+buyLabelText = longCondition ? str.format("Buy\nSL: {0,number,#.####}\nTP1: {1,number,#.####}\nTP2: {2,number,#.####}", longStop, longTp1, longTp2) : ""
+sellLabelText = shortCondition ? str.format("Sell\nSL: {0,number,#.####}\nTP1: {1,number,#.####}\nTP2: {2,number,#.####}", shortStop, shortTp1, shortTp2) : ""
+
+plotshape(longCondition, title="Buy Signal", location=location.belowbar, color=color.new(color.green, 0), style=shape.labelup, text=buyLabelText)
+plotshape(shortCondition, title="Sell Signal", location=location.abovebar, color=color.new(color.red, 0), style=shape.labeldown, text=sellLabelText)
+
+plot(longStop, title="Long Stop Loss", color=color.new(color.red, 40), linewidth=1, style=plot.style_linebr)
+plot(longTp1, title="Long Take Profit 1", color=color.new(color.green, 40), linewidth=1, style=plot.style_linebr)
+plot(longTp2, title="Long Take Profit 2", color=color.new(color.green, 0), linewidth=1, style=plot.style_linebr)
+
+plot(shortStop, title="Short Stop Loss", color=color.new(color.red, 40), linewidth=1, style=plot.style_linebr)
+plot(shortTp1, title="Short Take Profit 1", color=color.new(color.teal, 40), linewidth=1, style=plot.style_linebr)
+plot(shortTp2, title="Short Take Profit 2", color=color.new(color.teal, 0), linewidth=1, style=plot.style_linebr)
 
 alertcondition(longCondition, title="Fast SMA Crosses Above Slow SMA", message="Buy Signal: Fast SMA crossed above Slow SMA")
 alertcondition(shortCondition, title="Fast SMA Crosses Below Slow SMA", message="Sell Signal: Fast SMA crossed below Slow SMA")
