@@ -115,13 +115,7 @@ float rsiValue = ta.rsi(close, rsiLen)
 bool useHTF = tfHTF != ""
 float htfSma = na
 if useHTF
-    htfSma := request.security(
-        syminfo.tickerid,
-        tfHTF,
-        ta.sma(close, 200),
-        barmerge.gaps_on,
-        barmerge.lookahead_off
-    )
+    htfSma := request.security(syminfo.tickerid, tfHTF, ta.sma(close, 200), barmerge.gaps_on, barmerge.lookahead_off)
 
 var int trendDir = 0
 var line[] bosLines = array.new_line()
