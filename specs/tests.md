@@ -1,0 +1,5 @@
+- Load 15m XAUUSD; swingLen=5. Expect BOS labels only after bar close.
+- Force wick breaks off; compare BOS count with `closeOnly=true`.
+- After a BOS, the OB must belong to the last opposite candle before the impulse; verify box persists until invalidation.
+- CHOCH prints only when new BOS opposes prior trend.
+- Alerts fire once per confirmed bar.
