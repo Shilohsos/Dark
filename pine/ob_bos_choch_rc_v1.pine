@@ -1,0 +1,858 @@
+//@version=5
+indicator("OB + BOS + CHOCH + RC v1", overlay=true, max_lines_count=500, max_labels_count=500, max_boxes_count=200)
+
+//=== Inputs ===//
+groupGeneral = "General"
+tfHTF = input.string("", "tfHTF", group=groupGeneral)
+swingLen = input.int(5, "swingLen", minval=3, maxval=10, group=groupGeneral)
+lookback = input.int(500, "lookback", minval=0, group=groupGeneral)
+maxBoxes = input.int(10, "maxBoxes", minval=1, maxval=50, group=groupGeneral)
+
+groupOB = "Order Block"
+obType = input.string("both", "obType", options=["both", "bullish", "bearish"], group=groupOB)
+obLookback = input.int(30, "obLookback", minval=1, maxval=200, group=groupOB)
+obBodyPct = input.float(30.0, "obBodyPct", minval=0.0, maxval=100.0, group=groupOB)
+
+groupBOS = "BOS / CHOCH"
+bosWickOK = input.bool(true, "bosWickOK", group=groupBOS)
+closeOnly = input.bool(false, "closeOnly", group=groupBOS)
+bosMinDistATR = input.float(0.0, "bosMinDistATR", minval=0.0, step=0.1, group=groupBOS)
+
+groupRC = "Reversal / Continuation"
+confirmWith = input.string("none", "confirmWith", options=["none", "rsi", "atrVol"], group=groupRC)
+rsiLen = input.int(14, "rsiLen", minval=2, group=groupRC)
+atrLen = input.int(14, "atrLen", minval=1, group=groupRC)
+atrMin = input.float(0.5, "atrMin", minval=0.0, step=0.1, group=groupRC)
+
+groupSig = "Signals"
+showSLTP = input.bool(true, "Draw SL/TP", group=groupSig)
+rr1 = input.float(1.5, "TP1 R multiple", minval=0.1, step=0.1, group=groupSig)
+rr2 = input.float(3.0, "TP2 R multiple", minval=0.1, step=0.1, group=groupSig)
+
+groupVisual = "Visuals"
+showOBBox = input.bool(false, "showOBBox", group=groupVisual)
+showLines = input.bool(true, "showLines", group=groupVisual)
+showLabels = input.bool(true, "showLabels", group=groupVisual)
+bosColor = input.color(color.new(color.blue, 0), "bosColor", group=groupVisual)
+chochColor = input.color(color.new(color.purple, 0), "chochColor", group=groupVisual)
+bullObColor = input.color(color.new(color.green, 70), "bullObColor", group=groupVisual)
+bearObColor = input.color(color.new(color.red, 70), "bearObColor", group=groupVisual)
+showDashboard = input.bool(false, "showDashboard", group=groupVisual)
+stubLenBars = input.int(3, "Line length (bars)", minval=1, maxval=10, group=groupVisual)
+
+//=== Swings ===//
+ph = ta.pivothigh(high, swingLen, swingLen)
+pl = ta.pivotlow(low, swingLen, swingLen)
+
+var float[] swingHighVals = array.new_float()
+var int[] swingHighIdx = array.new_int()
+var float[] swingLowVals = array.new_float()
+var int[] swingLowIdx = array.new_int()
+
+if barstate.isconfirmed
+    if not na(ph)
+        array.push(swingHighVals, ph)
+        array.push(swingHighIdx, bar_index - swingLen)
+    if not na(pl)
+        array.push(swingLowVals, pl)
+        array.push(swingLowIdx, bar_index - swingLen)
+
+    if lookback > 0
+        while array.size(swingHighIdx) > 0
+            int oldestHighIdx = array.get(swingHighIdx, 0)
+            if bar_index - oldestHighIdx > lookback
+                array.shift(swingHighIdx)
+                array.shift(swingHighVals)
+            else
+                break
+        while array.size(swingLowIdx) > 0
+            int oldestLowIdx = array.get(swingLowIdx, 0)
+            if bar_index - oldestLowIdx > lookback
+                array.shift(swingLowIdx)
+                array.shift(swingLowVals)
+            else
+                break
+
+    while array.size(swingHighVals) > 3 and array.size(swingHighIdx) > 0
+        array.shift(swingHighVals)
+        array.shift(swingHighIdx)
+    while array.size(swingLowVals) > 3 and array.size(swingLowIdx) > 0
+        array.shift(swingLowVals)
+        array.shift(swingLowIdx)
+
+lastHH = array.size(swingHighVals) > 0 ? array.get(swingHighVals, array.size(swingHighVals) - 1) : na
+lastHHIndex = array.size(swingHighIdx) > 0 ? array.get(swingHighIdx, array.size(swingHighIdx) - 1) : na
+lastLL = array.size(swingLowVals) > 0 ? array.get(swingLowVals, array.size(swingLowVals) - 1) : na
+lastLLIndex = array.size(swingLowIdx) > 0 ? array.get(swingLowIdx, array.size(swingLowIdx) - 1) : na
+
+//=== Structure ===//
+float atrValue = ta.atr(atrLen)
+float atrAvg = ta.sma(atrValue, atrLen)
+float rsiValue = ta.rsi(close, rsiLen)
+bool useHTF = tfHTF != ""
+string tfResolved = useHTF ? tfHTF : timeframe.period
+float hSMARequest = request.security(syminfo.tickerid, tfResolved, ta.sma(close, 200), barmerge.gaps_on, barmerge.lookahead_off)
+float hSMA = useHTF ? hSMARequest : na
+
+var int trendDir = 0
+var bool prevBullBreak = false
+var bool prevBearBreak = false
+var line[] bosLines = array.new_line()
+var label[] bosLabels = array.new_label()
+var int lastBOSBar = na
+var float lastBOSPrice = na
+var int lastCHOCHBar = na
+var float lastCHOCHPrice = na
+var string lastBosText = "None"
+var color lastBosColor = color.new(color.gray, 70)
+var string lastChochText = "None"
+var color lastChochColor = color.new(color.gray, 70)
+var string lastSignalText = "None"
+var color lastSignalColor = color.new(color.gray, 70)
+var table dashTable = na
+
+// --- SL/TP Handle Storage ---
+var line  longSLLine   = na
+var line  longTP1Line  = na
+var line  longTP2Line  = na
+var label longSLLabel  = na
+var label longTP1Label = na
+var label longTP2Label = na
+
+var line  shortSLLine   = na
+var line  shortTP1Line  = na
+var line  shortTP2Line  = na
+var label shortSLLabel  = na
+var label shortTP1Label = na
+var label shortTP2Label = na
+
+// --- Helpers ---
+isLine(line id) => not na(id)
+isBox(box id) => not na(id)
+isLabel(label id) => not na(id)
+
+f_trim_lines(array<line> lines, int maxN) =>
+    while array.size(lines) > maxN
+        line ln = array.shift(lines)
+        if isLine(ln)
+            line.delete(ln)
+
+f_trim_boxes(array<box> boxes, int maxN) =>
+    while array.size(boxes) > maxN
+        box b = array.shift(boxes)
+        if isBox(b)
+            box.delete(b)
+
+f_trim_labels(array<label> lbs, int maxN) =>
+    while array.size(lbs) > maxN
+        label lb = array.shift(lbs)
+        if isLabel(lb)
+            label.delete(lb)
+
+f_trim_structures() =>
+    int maxStructures = math.max(5, maxBoxes * 2)
+    f_trim_lines(bosLines, maxStructures)
+    f_trim_labels(bosLabels, maxStructures)
+
+bosSourceBull = closeOnly ? close : bosWickOK ? high : close
+bosSourceBear = closeOnly ? close : bosWickOK ? low : close
+
+bool bosBullCond = not na(lastHH) and bosSourceBull > lastHH and (bosMinDistATR <= 0 or (not na(atrValue) and bosSourceBull - lastHH >= bosMinDistATR * atrValue))
+bool bosBearCond = not na(lastLL) and bosSourceBear < lastLL and (bosMinDistATR <= 0 or (not na(atrValue) and lastLL - bosSourceBear >= bosMinDistATR * atrValue))
+
+bool bosBull = barstate.isconfirmed and bosBullCond and not prevBullBreak
+bool bosBear = barstate.isconfirmed and bosBearCond and not prevBearBreak
+
+prevBullBreak := bosBullCond
+prevBearBreak := bosBearCond
+
+bool bosEvent = false
+bool chochEvent = false
+int bosDir = 0
+
+if bosBull
+    bosEvent := true
+    bosDir := 1
+if bosBear
+    bosEvent := true
+    bosDir := -1
+
+if bosEvent
+    chochEvent := (trendDir == -bosDir and trendDir != 0)
+    trendDir := bosDir
+
+    lastBosText := bosDir == 1 ? "Bullish BOS" : "Bearish BOS"
+    lastBosColor := bosDir == 1 ? color.new(color.green, 60) : color.new(color.red, 60)
+    if chochEvent
+        lastChochText := bosDir == 1 ? "Bullish CHOCH" : "Bearish CHOCH"
+        lastChochColor := bosDir == 1 ? color.new(color.green, 40) : color.new(color.red, 40)
+
+    float bosPrice = bosDir == 1 ? bosSourceBull : bosSourceBear
+    bool sameBOSPlace = not na(bosPrice) and ((bar_index == lastBOSBar) or (not na(lastBOSPrice) and math.abs(bosPrice - lastBOSPrice) <= syminfo.mintick * 4))
+    bool sameCHOCHPlace = chochEvent and not na(bosPrice) and ((bar_index == lastCHOCHBar) or (not na(lastCHOCHPrice) and math.abs(bosPrice - lastCHOCHPrice) <= syminfo.mintick * 4))
+
+    if not sameBOSPlace and (not chochEvent or not sameCHOCHPlace)
+        if showLines and not na(bosPrice)
+            color lineColor = chochEvent ? chochColor : bosColor
+            line l = line.new(bar_index, bosPrice, bar_index + stubLenBars, bosPrice, extend=extend.none, color=lineColor, width=1)
+            array.push(bosLines, l)
+        if showLabels and not na(bosPrice)
+            string txt = chochEvent ? "CHOCH" : "BOS"
+            color labelBg = chochEvent ? chochColor : bosColor
+            float offset = syminfo.mintick * 2.0
+            float labelPrice = bosDir == 1 ? bosPrice + offset : bosPrice - offset
+            int labelShift = math.max(1, int(math.round(stubLenBars * 0.5)))
+            label lbl = label.new(bar_index + labelShift, labelPrice, txt, style=bosDir == 1 ? label.style_label_down : label.style_label_up, color=color.new(labelBg, 0), textcolor=color.white, size=size.tiny)
+            array.push(bosLabels, lbl)
+        lastBOSBar := bar_index
+        lastBOSPrice := bosPrice
+        if chochEvent
+            lastCHOCHBar := bar_index
+            lastCHOCHPrice := bosPrice
+
+        f_trim_structures()
+
+if not showLines and array.size(bosLines) > 0
+    f_trim_lines(bosLines, 0)
+    array.clear(bosLines)
+if not showLabels and array.size(bosLabels) > 0
+    f_trim_labels(bosLabels, 0)
+    array.clear(bosLabels)
+
+//=== Order Blocks ===//
+var box[] obBoxes = array.new_box()
+var line[] obTopLines = array.new_line()
+var line[] obBottomLines = array.new_line()
+var label[] obLabels = array.new_label()
+var int[] obDirs = array.new_int()
+var bool[] obActive = array.new_bool()
+var bool[] obMitigated = array.new_bool()
+var bool[] obFromChoch = array.new_bool()
+var float[] obTopVals = array.new_float()
+var float[] obBottomVals = array.new_float()
+var float[] obBodyEdgeVals = array.new_float()
+var int[] obLeftIdx = array.new_int()
+
+f_min_int(int a, int b) => a < b ? a : b
+
+f_ob_count() =>
+    int count = array.size(obBoxes)
+    count := f_min_int(count, array.size(obLabels))
+    count := f_min_int(count, array.size(obDirs))
+    count := f_min_int(count, array.size(obActive))
+    count := f_min_int(count, array.size(obMitigated))
+    count := f_min_int(count, array.size(obFromChoch))
+    count := f_min_int(count, array.size(obTopLines))
+    count := f_min_int(count, array.size(obBottomLines))
+    count := f_min_int(count, array.size(obTopVals))
+    count := f_min_int(count, array.size(obBottomVals))
+    count := f_min_int(count, array.size(obBodyEdgeVals))
+    count := f_min_int(count, array.size(obLeftIdx))
+    count
+
+f_enforce_ob_capacity() =>
+    if array.size(obBoxes) > maxBoxes
+        int prevSize = array.size(obBoxes)
+        f_trim_boxes(obBoxes, maxBoxes)
+        int removed = prevSize - array.size(obBoxes)
+        for rem = 0 to removed - 1
+            line topLine = array.shift(obTopLines)
+            if isLine(topLine)
+                line.delete(topLine)
+            line bottomLine = array.shift(obBottomLines)
+            if isLine(bottomLine)
+                line.delete(bottomLine)
+            label lb = array.shift(obLabels)
+            if isLabel(lb)
+                label.delete(lb)
+            array.shift(obDirs)
+            array.shift(obActive)
+            array.shift(obMitigated)
+            array.shift(obFromChoch)
+            array.shift(obTopVals)
+            array.shift(obBottomVals)
+            array.shift(obBodyEdgeVals)
+            array.shift(obLeftIdx)
+
+
+f_register_ob(int direction, bool fromChoch) =>
+    if direction == 1 and (obType == "both" or obType == "bullish")
+        float top = na
+        float bottom = na
+        float foundOpen = na
+        float foundClose = na
+        int idx = na
+        for i = 1 to obLookback
+            int bi = bar_index - i
+            if bi < 0
+                break
+            float o = open[i]
+            float c = close[i]
+            float h = high[i]
+            float l = low[i]
+            bool isBear = c < o
+            if not isBear
+                continue
+            float candleRange = h - l
+            float bodyPct = candleRange != 0 ? math.abs(c - o) / candleRange * 100.0 : 0.0
+            if bodyPct < obBodyPct
+                continue
+            top := math.max(o, c)
+            bottom := l
+            idx := bi
+            foundOpen := o
+            foundClose := c
+            break
+        if not na(top) and not na(bottom) and not na(idx)
+            float bodyBottom = math.min(foundOpen, foundClose)
+            box bNew = na
+            if showOBBox
+                bNew := box.new(idx, top, idx, bodyBottom, bgcolor=color.new(bullObColor, 90), border_color=color.new(color.green, 0))
+            line topLine = showLines ? line.new(idx, top, idx + stubLenBars, top, extend=extend.none, width=1, color=color.new(color.green, 0)) : na
+            line bottomLine = showLines ? line.new(idx, bottom, idx + stubLenBars, bottom, extend=extend.none, width=1, color=color.new(color.green, 0)) : na
+            label lNew = showLabels ? label.new(idx, top, "Bull OB", color=color.new(color.green, 20), textcolor=color.white, style=label.style_label_left, size=size.tiny) : na
+            array.push(obBoxes, bNew)
+            array.push(obTopLines, topLine)
+            array.push(obBottomLines, bottomLine)
+            array.push(obLabels, lNew)
+            array.push(obDirs, 1)
+            array.push(obActive, true)
+            array.push(obMitigated, false)
+            array.push(obFromChoch, fromChoch)
+            array.push(obTopVals, top)
+            array.push(obBottomVals, bottom)
+            array.push(obBodyEdgeVals, bodyBottom)
+            array.push(obLeftIdx, idx)
+            f_enforce_ob_capacity()
+    if direction == -1 and (obType == "both" or obType == "bearish")
+        float top = na
+        float bottom = na
+        float foundOpen = na
+        float foundClose = na
+        int idx = na
+        for i = 1 to obLookback
+            int bi = bar_index - i
+            if bi < 0
+                break
+            float o = open[i]
+            float c = close[i]
+            float h = high[i]
+            float l = low[i]
+            bool isBull = c > o
+            if not isBull
+                continue
+            float candleRange = h - l
+            float bodyPct = candleRange != 0 ? math.abs(c - o) / candleRange * 100.0 : 0.0
+            if bodyPct < obBodyPct
+                continue
+            top := h
+            bottom := math.min(o, c)
+            idx := bi
+            foundOpen := o
+            foundClose := c
+            break
+        if not na(top) and not na(bottom) and not na(idx)
+            float bodyTop = math.max(foundOpen, foundClose)
+            box bNew = na
+            if showOBBox
+                bNew := box.new(idx, bodyTop, idx, bottom, bgcolor=color.new(bearObColor, 90), border_color=color.new(color.red, 0))
+            line topLine = showLines ? line.new(idx, top, idx + stubLenBars, top, extend=extend.none, width=1, color=color.new(color.red, 0)) : na
+            line bottomLine = showLines ? line.new(idx, bottom, idx + stubLenBars, bottom, extend=extend.none, width=1, color=color.new(color.red, 0)) : na
+            label lNew = showLabels ? label.new(idx, bottom, "Bear OB", color=color.new(color.red, 20), textcolor=color.white, style=label.style_label_left, size=size.tiny) : na
+            array.push(obBoxes, bNew)
+            array.push(obTopLines, topLine)
+            array.push(obBottomLines, bottomLine)
+            array.push(obLabels, lNew)
+            array.push(obDirs, -1)
+            array.push(obActive, true)
+            array.push(obMitigated, false)
+            array.push(obFromChoch, fromChoch)
+            array.push(obTopVals, top)
+            array.push(obBottomVals, bottom)
+            array.push(obBodyEdgeVals, bodyTop)
+            array.push(obLeftIdx, idx)
+            f_enforce_ob_capacity()
+
+if bosEvent
+    int existingCount = f_ob_count()
+    if existingCount > 0
+        for i = 0 to existingCount - 1
+            if array.get(obActive, i) and array.get(obDirs, i) == -bosDir
+                box bRef = array.get(obBoxes, i)
+                line topLine = array.get(obTopLines, i)
+                line bottomLine = array.get(obBottomLines, i)
+                label lbRef = array.get(obLabels, i)
+                array.set(obActive, i, false)
+                if isBox(bRef)
+                    box.delete(bRef)
+                    array.set(obBoxes, i, na)
+                if isLine(topLine)
+                    line.delete(topLine)
+                    array.set(obTopLines, i, na)
+                if isLine(bottomLine)
+                    line.delete(bottomLine)
+                    array.set(obBottomLines, i, na)
+                if isLabel(lbRef)
+                    label.delete(lbRef)
+                    array.set(obLabels, i, na)
+    f_register_ob(bosDir, chochEvent)
+
+//=== Signals ===//
+var bool longSignal = false
+var bool shortSignal = false
+var bool mitigatedSignal = false
+
+var float longEntryPrice = na
+var float longStop = na
+var float longTp1 = na
+var float longTp2 = na
+var int longEntryBar = na
+var bool longActiveTrade = false
+var bool longTp1Triggered = false
+var bool longTp2Triggered = false
+var bool longSlTriggered = false
+
+var float shortEntryPrice = na
+var float shortStop = na
+var float shortTp1 = na
+var float shortTp2 = na
+var int shortEntryBar = na
+var bool shortActiveTrade = false
+var bool shortTp1Triggered = false
+var bool shortTp2Triggered = false
+var bool shortSlTriggered = false
+
+longSignal := false
+shortSignal := false
+mitigatedSignal := false
+
+f_pass_filters(bool isLong) =>
+    bool pass = true
+    if confirmWith == "rsi"
+        pass := pass and (isLong ? rsiValue > 50 : rsiValue < 50)
+    if confirmWith == "atrVol"
+        pass := pass and (not na(atrValue) and not na(atrAvg) ? atrValue >= atrMin * atrAvg : false)
+    if useHTF
+        bool htfOk = not na(hSMA) and (isLong ? close > hSMA : close < hSMA)
+        pass := pass and (barstate.isconfirmed ? htfOk : false)
+    pass
+
+f_clear_trade(line sl, line tp1, line tp2, label sll, label tp1l, label tp2l) =>
+    if isLine(sl)
+        line.delete(sl)
+        sl := na
+    if isLine(tp1)
+        line.delete(tp1)
+        tp1 := na
+    if isLine(tp2)
+        line.delete(tp2)
+        tp2 := na
+    if isLabel(sll)
+        label.delete(sll)
+        sll := na
+    if isLabel(tp1l)
+        label.delete(tp1l)
+        tp1l := na
+    if isLabel(tp2l)
+        label.delete(tp2l)
+        tp2l := na
+    [sl, tp1, tp2, sll, tp1l, tp2l]
+
+f_draw_entry(bool isLong, float stopPrice, float tp1Price, float tp2Price, int stubLen) =>
+    color slColor = color.new(color.red, 0)
+    color tpColor = color.new(color.green, 0)
+    int x1 = bar_index
+    int x2 = bar_index + stubLen
+    string tpArrow = isLong ? "↑" : "↓"
+    string slArrow = isLong ? "↓" : "↑"
+    string tp1Text = "TP1 " + str.tostring(rr1, format.mintick) + "R " + tpArrow
+    string tp2Text = "TP2 " + str.tostring(rr2, format.mintick) + "R " + tpArrow
+    string slText = "SL " + slArrow
+    line slLine = line.new(x1, stopPrice, x2, stopPrice, extend=extend.none, width=1, color=slColor)
+    line tp1Line = line.new(x1, tp1Price, x2, tp1Price, extend=extend.none, width=1, color=tpColor)
+    line tp2Line = line.new(x1, tp2Price, x2, tp2Price, extend=extend.none, width=1, color=tpColor)
+    label slLabel = label.new(x2, stopPrice, slText, style=label.style_label_right, textcolor=color.white, color=slColor, size=size.tiny)
+    label tp1Label = label.new(x2, tp1Price, tp1Text, style=label.style_label_right, textcolor=color.white, color=tpColor, size=size.tiny)
+    label tp2Label = label.new(x2, tp2Price, tp2Text, style=label.style_label_right, textcolor=color.white, color=tpColor, size=size.tiny)
+    [slLine, tp1Line, tp2Line, slLabel, tp1Label, tp2Label]
+
+int activeBullCount = 0
+int activeBearCount = 0
+int obCount = f_ob_count()
+
+bool tp1HitEvent = false
+bool tp2HitEvent = false
+bool slHitEvent = false
+
+tp1HitEvent := false
+tp2HitEvent := false
+slHitEvent := false
+
+if barstate.isconfirmed
+    float newLongStop = na
+    float newShortStop = na
+    if obCount > 0
+        for i = 0 to obCount - 1
+            if not array.get(obActive, i)
+                continue
+            int   dir       = array.get(obDirs, i)
+            bool  mitigated = array.get(obMitigated, i)
+            float topVal    = array.get(obTopVals, i)
+            float bottomVal = array.get(obBottomVals, i)
+            float bodyEdge  = array.get(obBodyEdgeVals, i)
+            int   leftIdx   = array.get(obLeftIdx, i)
+            box   bRef      = array.get(obBoxes, i)
+            line  topLineRef    = array.get(obTopLines, i)
+            line  bottomLineRef = array.get(obBottomLines, i)
+            label lbRef     = array.get(obLabels, i)
+            float boxTop    = dir == 1 ? topVal   : bodyEdge
+            float boxBottom = dir == 1 ? bodyEdge : bottomVal
+            color obLineColor = dir == 1 ? color.new(color.green, 0) : color.new(color.red, 0)
+
+            // --- OB box draw/update ---
+            if showOBBox
+                if not isBox(bRef)
+                    bRef := box.new(leftIdx, boxTop, leftIdx, boxBottom, bgcolor=color.new(dir == 1 ? bullObColor : bearObColor, 90), border_color=obLineColor)
+                    array.set(obBoxes, i, bRef)
+                if isBox(bRef)
+                    box.set_left(bRef, leftIdx)
+                    box.set_top(bRef, boxTop)
+                    box.set_bottom(bRef, boxBottom)
+                    box.set_right(bRef, bar_index)
+                    box.set_bgcolor(bRef, color.new(dir == 1 ? bullObColor : bearObColor, 90))
+                    box.set_border_color(bRef, obLineColor)
+                    box.set_border_width(bRef, 1)
+            else if isBox(bRef)
+                box.delete(bRef)
+                array.set(obBoxes, i, na)
+
+            // --- OB lines draw/update ---
+            if showLines
+                if not isLine(topLineRef) and not na(topVal)
+                    topLineRef := line.new(bar_index, topVal, bar_index + stubLenBars, topVal, extend=extend.none, width=1, color=obLineColor)
+                    array.set(obTopLines, i, topLineRef)
+                if isLine(topLineRef)
+                    line.set_x1(topLineRef, bar_index)
+                    line.set_x2(topLineRef, bar_index + stubLenBars)
+                    line.set_y1(topLineRef, topVal)
+                    line.set_y2(topLineRef, topVal)
+                if not isLine(bottomLineRef) and not na(bottomVal)
+                    bottomLineRef := line.new(bar_index, bottomVal, bar_index + stubLenBars, bottomVal, extend=extend.none, width=1, color=obLineColor)
+                    array.set(obBottomLines, i, bottomLineRef)
+                if isLine(bottomLineRef)
+                    line.set_x1(bottomLineRef, bar_index)
+                    line.set_x2(bottomLineRef, bar_index + stubLenBars)
+                    line.set_y1(bottomLineRef, bottomVal)
+                    line.set_y2(bottomLineRef, bottomVal)
+            else
+                if isLine(topLineRef)
+                    line.delete(topLineRef)
+                    array.set(obTopLines, i, na)
+                if isLine(bottomLineRef)
+                    line.delete(bottomLineRef)
+                    array.set(obBottomLines, i, na)
+
+            // --- Label update ---
+            if isLabel(lbRef)
+                label.set_x(lbRef, leftIdx)
+                label.set_size(lbRef, size.tiny)
+
+            // --- Invalidation / Mitigation checks ---
+            bool invalid = false
+            bool newMitigation = false
+            if dir == 1
+                if close < bottomVal
+                    invalid := true
+                else if not mitigated and low <= topVal and close >= topVal
+                    newMitigation := true
+            else if dir == -1
+                if close > topVal
+                    invalid := true
+                else if not mitigated and high >= bottomVal and close <= bottomVal
+                    newMitigation := true
+
+            if invalid
+                array.set(obActive, i, false)
+                if isBox(bRef)
+                    box.delete(bRef)
+                    array.set(obBoxes, i, na)
+                if isLine(topLineRef)
+                    line.delete(topLineRef)
+                    array.set(obTopLines, i, na)
+                if isLine(bottomLineRef)
+                    line.delete(bottomLineRef)
+                    array.set(obBottomLines, i, na)
+            else if newMitigation
+                array.set(obMitigated, i, true)
+                mitigatedSignal := true
+
+                bool triggeredLong = false
+                bool triggeredShort = false
+                if dir == 1 and f_pass_filters(true)
+                    if array.get(obFromChoch, i) or trendDir == 1
+                        longSignal := true
+                        triggeredLong := true
+                if dir == -1 and f_pass_filters(false)
+                    if array.get(obFromChoch, i) or trendDir == -1
+                        shortSignal := true
+                        triggeredShort := true
+                if triggeredLong and na(newLongStop)
+                    newLongStop := bottomVal
+                if triggeredShort and na(newShortStop)
+                    newShortStop := topVal
+
+                if isLabel(lbRef)
+                    label.set_text(lbRef, dir == 1 ? "Bull OB✓" : "Bear OB✓")
+                    label.set_color(lbRef, color.new(color.yellow, 20))
+                    label.set_textcolor(lbRef, color.black)
+
+            if invalid and isLabel(lbRef)
+                label.set_text(lbRef, dir == 1 ? "Bull OB✕" : "Bear OB✕")
+                label.set_color(lbRef, color.new(color.gray, 20))
+                label.set_textcolor(lbRef, color.black)
+
+    if obCount > 0
+        for i = 0 to obCount - 1
+            if array.get(obActive, i)
+                if array.get(obDirs, i) == 1
+                    activeBullCount += 1
+                else if array.get(obDirs, i) == -1
+                    activeBearCount += 1
+
+    if longSignal and shortSignal
+        lastSignalText := "Long & Short"
+        lastSignalColor := color.new(color.orange, 40)
+    else if longSignal
+        lastSignalText := "Long Entry"
+        lastSignalColor := color.new(color.green, 40)
+    else if shortSignal
+        lastSignalText := "Short Entry"
+        lastSignalColor := color.new(color.red, 40)
+    else if mitigatedSignal
+        lastSignalText := "OB Mitigated"
+        lastSignalColor := color.new(color.yellow, 30)
+
+    if longSignal
+        float stopCandidate = not na(newLongStop) ? newLongStop : (not na(lastLL) ? lastLL : low)
+        float entryPrice = close
+        float risk = entryPrice - stopCandidate
+        if risk > 0
+            longEntryPrice := entryPrice
+            longStop := stopCandidate
+            longTp1 := entryPrice + rr1 * risk
+            longTp2 := entryPrice + rr2 * risk
+            longEntryBar := bar_index
+            longActiveTrade := true
+            longTp1Triggered := false
+            longTp2Triggered := false
+            longSlTriggered := false
+            [longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label] :=
+                f_clear_trade(longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label)
+            if showSLTP
+                [longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label] :=
+                    f_draw_entry(true, longStop, longTp1, longTp2, stubLenBars)
+        else
+            longActiveTrade := false
+            longEntryPrice := na
+            longStop := na
+            longTp1 := na
+            longTp2 := na
+            longEntryBar := na
+            longTp1Triggered := false
+            longTp2Triggered := false
+            longSlTriggered := false
+            [longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label] :=
+                f_clear_trade(longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label)
+
+    if shortSignal
+        float stopCandidate = not na(newShortStop) ? newShortStop : (not na(lastHH) ? lastHH : high)
+        float entryPrice = close
+        float risk = stopCandidate - entryPrice
+        if risk > 0
+            shortEntryPrice := entryPrice
+            shortStop := stopCandidate
+            shortTp1 := entryPrice - rr1 * risk
+            shortTp2 := entryPrice - rr2 * risk
+            shortEntryBar := bar_index
+            shortActiveTrade := true
+            shortTp1Triggered := false
+            shortTp2Triggered := false
+            shortSlTriggered := false
+            [shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label] :=
+                f_clear_trade(shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label)
+            if showSLTP
+                [shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label] :=
+                    f_draw_entry(false, shortStop, shortTp1, shortTp2, stubLenBars)
+        else
+            shortActiveTrade := false
+            shortEntryPrice := na
+            shortStop := na
+            shortTp1 := na
+            shortTp2 := na
+            shortEntryBar := na
+            shortTp1Triggered := false
+            shortTp2Triggered := false
+            shortSlTriggered := false
+            [shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label] :=
+                f_clear_trade(shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label)
+
+    if longActiveTrade and not na(longEntryBar) and bar_index > longEntryBar
+        bool stopHit = false
+        if not longSlTriggered and low <= longStop
+            longSlTriggered := true
+            longActiveTrade := false
+            slHitEvent := true
+            stopHit := true
+            [longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label] :=
+                f_clear_trade(longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label)
+        if not stopHit
+            if not longTp2Triggered and high >= longTp2
+                longTp2Triggered := true
+                longActiveTrade := false
+                tp2HitEvent := true
+                [longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label] :=
+                    f_clear_trade(longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label)
+            if not longTp1Triggered and high >= longTp1
+                longTp1Triggered := true
+                tp1HitEvent := true
+
+    if shortActiveTrade and not na(shortEntryBar) and bar_index > shortEntryBar
+        bool stopHit = false
+        if not shortSlTriggered and high >= shortStop
+            shortSlTriggered := true
+            shortActiveTrade := false
+            slHitEvent := true
+            stopHit := true
+            [shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label] :=
+                f_clear_trade(shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label)
+        if not stopHit
+            if not shortTp2Triggered and low <= shortTp2
+                shortTp2Triggered := true
+                shortActiveTrade := false
+                tp2HitEvent := true
+                [shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label] :=
+                    f_clear_trade(shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label)
+            if not shortTp1Triggered and low <= shortTp1
+                shortTp1Triggered := true
+                tp1HitEvent := true
+
+    if not showSLTP
+        [longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label] :=
+            f_clear_trade(longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label)
+        [shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label] :=
+            f_clear_trade(shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label)
+    else
+        if longActiveTrade and not isLine(longSLLine) and not na(longStop) and not na(longTp1) and not na(longTp2)
+            [longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label] :=
+                f_clear_trade(longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label)
+            [longSLLine, longTP1Line, longTP2Line, longSLLabel, longTP1Label, longTP2Label] :=
+                f_draw_entry(true, longStop, longTp1, longTp2, stubLenBars)
+        if shortActiveTrade and not isLine(shortSLLine) and not na(shortStop) and not na(shortTp1) and not na(shortTp2)
+            [shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label] :=
+                f_clear_trade(shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label)
+            [shortSLLine, shortTP1Line, shortTP2Line, shortSLLabel, shortTP1Label, shortTP2Label] :=
+                f_draw_entry(false, shortStop, shortTp1, shortTp2, stubLenBars)
+        if longActiveTrade and isLine(longSLLine)
+            int longStart = na(longEntryBar) ? bar_index : longEntryBar
+            int longEnd = longStart + stubLenBars
+            line.set_x1(longSLLine, longStart)
+            line.set_x2(longSLLine, longEnd)
+            line.set_y1(longSLLine, longStop)
+            line.set_y2(longSLLine, longStop)
+            if isLine(longTP1Line)
+                line.set_x1(longTP1Line, longStart)
+                line.set_x2(longTP1Line, longEnd)
+                line.set_y1(longTP1Line, longTp1)
+                line.set_y2(longTP1Line, longTp1)
+            if isLine(longTP2Line)
+                line.set_x1(longTP2Line, longStart)
+                line.set_x2(longTP2Line, longEnd)
+                line.set_y1(longTP2Line, longTp2)
+                line.set_y2(longTP2Line, longTp2)
+            if isLabel(longSLLabel)
+                label.set_x(longSLLabel, longEnd)
+            if isLabel(longTP1Label)
+                label.set_x(longTP1Label, longEnd)
+            if isLabel(longTP2Label)
+                label.set_x(longTP2Label, longEnd)
+        if shortActiveTrade and isLine(shortSLLine)
+            int shortStart = na(shortEntryBar) ? bar_index : shortEntryBar
+            int shortEnd = shortStart + stubLenBars
+            line.set_x1(shortSLLine, shortStart)
+            line.set_x2(shortSLLine, shortEnd)
+            line.set_y1(shortSLLine, shortStop)
+            line.set_y2(shortSLLine, shortStop)
+            if isLine(shortTP1Line)
+                line.set_x1(shortTP1Line, shortStart)
+                line.set_x2(shortTP1Line, shortEnd)
+                line.set_y1(shortTP1Line, shortTp1)
+                line.set_y2(shortTP1Line, shortTp1)
+            if isLine(shortTP2Line)
+                line.set_x1(shortTP2Line, shortStart)
+                line.set_x2(shortTP2Line, shortEnd)
+                line.set_y1(shortTP2Line, shortTp2)
+                line.set_y2(shortTP2Line, shortTp2)
+            if isLabel(shortSLLabel)
+                label.set_x(shortSLLabel, shortEnd)
+            if isLabel(shortTP1Label)
+                label.set_x(shortTP1Label, shortEnd)
+            if isLabel(shortTP2Label)
+                label.set_x(shortTP2Label, shortEnd)
+
+if not showLabels and obCount > 0
+    for i = 0 to obCount - 1
+        label lbHide = array.get(obLabels, i)
+        if isLabel(lbHide)
+            label.delete(lbHide)
+            array.set(obLabels, i, na)
+
+string trendText = trendDir == 1 ? "BULLISH" : trendDir == -1 ? "BEARISH" : "NEUTRAL"
+color trendColor = trendDir == 1 ? color.new(color.green, 60) : trendDir == -1 ? color.new(color.red, 60) : color.new(color.gray, 70)
+string bosText = lastBosText
+color bosColorCell = lastBosColor
+string chochText = lastChochText
+color chochColorCell = lastChochColor
+string signalText = lastSignalText
+color signalColorCell = lastSignalColor
+string obSummary = str.format("{0} Bull / {1} Bear", activeBullCount, activeBearCount)
+color obSummaryColor = color.new(color.blue, 70)
+if activeBullCount + activeBearCount == 0
+    obSummaryColor := color.new(color.gray, 70)
+string htfText = useHTF ? (not na(hSMA) ? (close > hSMA ? "Above HTF SMA" : close < hSMA ? "Below HTF SMA" : "On HTF SMA") : "HTF SMA n/a") : "Filter off"
+color htfColorCell = useHTF ? (not na(hSMA) ? (close > hSMA ? color.new(color.green, 50) : color.new(color.red, 50)) : color.new(color.orange, 50)) : color.new(color.gray, 70)
+
+f_set_table_cell(table tbl, int column, int row, string txt, color bg, color txtColor) =>
+    if not na(tbl)
+        table.cell(tbl, column, row, txt, text_color=txtColor, bgcolor=bg)
+
+f_set_table_row(string title, string value, color valueBg, color valueTxt, int row) =>
+    if not na(dashTable)
+        f_set_table_cell(dashTable, 0, row, title, color.new(color.black, 80), color.white)
+        f_set_table_cell(dashTable, 1, row, value, valueBg, valueTxt)
+
+if showDashboard
+    if na(dashTable)
+        dashTable := table.new(position.top_right, 2, 6, border_width=1, border_color=color.new(color.gray, 70), frame_color=color.new(color.black, 85), frame_width=1)
+    f_set_table_row("Current Trend", trendText, trendColor, color.white, 0)
+    f_set_table_row("Last BOS", bosText, bosColorCell, color.white, 1)
+    f_set_table_row("Last CHOCH", chochText, chochColorCell, color.white, 2)
+    f_set_table_row("Active OBs", obSummary, obSummaryColor, color.white, 3)
+    f_set_table_row("Last Signal", signalText, signalColorCell, color.white, 4)
+    f_set_table_row("HTF Filter", htfText, htfColorCell, color.white, 5)
+else if not na(dashTable)
+    table.delete(dashTable)
+    dashTable := na
+
+//=== Plots ===//
+plot(lastHH, "Last HH", color=color.new(color.green, 40), linewidth=1)
+plot(lastLL, "Last LL", color=color.new(color.red, 40), linewidth=1)
+
+//=== Alerts ===//
+alertcondition(bosEvent, "BOS", "Break of structure detected")
+alertcondition(chochEvent, "CHOCH", "Change of character detected")
+alertcondition(longSignal, "LongEntry", "Long entry condition triggered")
+alertcondition(shortSignal, "ShortEntry", "Short entry condition triggered")
+alertcondition(mitigatedSignal, "OBMitigated", "Order block mitigated")
+alertcondition(slHitEvent, "SLHit", "Stop loss level hit")
+alertcondition(tp1HitEvent, "TP1Hit", "Take profit 1 reached")
+alertcondition(tp2HitEvent, "TP2Hit", "Take profit 2 reached")
