@@ -524,9 +524,7 @@ if barstate.isconfirmed
             // --- OB box draw/update ---
             if showOBBox
                 if not box.exists(bRef)
-                    bRef := box.new(leftIdx, boxTop, leftIdx, boxBottom,
-                                    bgcolor=color.new(dir == 1 ? bullObColor : bearObColor, 90),
-                                    border_color=obLineColor)
+                    bRef := box.new(leftIdx, boxTop, leftIdx, boxBottom, bgcolor=color.new(dir == 1 ? bullObColor : bearObColor, 90), border_color=obLineColor)
                     array.set(obBoxes, i, bRef)
                 if box.exists(bRef)
                     box.set_left(bRef, leftIdx)
