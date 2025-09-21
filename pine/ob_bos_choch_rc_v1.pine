@@ -1,0 +1,307 @@
+//@version=5
+indicator("OB + BOS + CHOCH + RC v1", overlay=true, max_lines_count=500, max_labels_count=500, max_boxes_count=200)
+
+//=== Inputs ===//
+groupGeneral = "General"
+tfHTF = input.string("", "tfHTF", group=groupGeneral)
+swingLen = input.int(5, "swingLen", minval=3, maxval=10, group=groupGeneral)
+lookback = input.int(500, "lookback", minval=0, group=groupGeneral)
+maxBoxes = input.int(10, "maxBoxes", minval=1, maxval=50, group=groupGeneral)
+
+groupOB = "Order Block"
+obType = input.string("both", "obType", options=["both", "bullish", "bearish"], group=groupOB)
+obLookback = input.int(30, "obLookback", minval=1, maxval=200, group=groupOB)
+obBodyPct = input.float(30.0, "obBodyPct", minval=0.0, maxval=100.0, group=groupOB)
+
+groupBOS = "BOS / CHOCH"
+bosWickOK = input.bool(true, "bosWickOK", group=groupBOS)
+closeOnly = input.bool(false, "closeOnly", group=groupBOS)
+bosMinDistATR = input.float(0.0, "bosMinDistATR", minval=0.0, step=0.1, group=groupBOS)
+
+groupRC = "Reversal / Continuation"
+confirmWith = input.string("none", "confirmWith", options=["none", "rsi", "atrVol"], group=groupRC)
+rsiLen = input.int(14, "rsiLen", minval=2, group=groupRC)
+atrLen = input.int(14, "atrLen", minval=1, group=groupRC)
+atrMin = input.float(0.5, "atrMin", minval=0.0, step=0.1, group=groupRC)
+
+groupVisual = "Visuals"
+showBoxes = input.bool(true, "showBoxes", group=groupVisual)
+showLines = input.bool(true, "showLines", group=groupVisual)
+showLabels = input.bool(true, "showLabels", group=groupVisual)
+bosColor = input.color(color.new(color.blue, 0), "bosColor", group=groupVisual)
+chochColor = input.color(color.new(color.purple, 0), "chochColor", group=groupVisual)
+bullObColor = input.color(color.new(color.green, 70), "bullObColor", group=groupVisual)
+bearObColor = input.color(color.new(color.red, 70), "bearObColor", group=groupVisual)
+showDashboard = input.bool(false, "showDashboard", group=groupVisual)
+
+//=== Swings ===//
+ph = ta.pivothigh(high, swingLen, swingLen)
+pl = ta.pivotlow(low, swingLen, swingLen)
+
+var float[] swingHighVals = array.new_float()
+var int[] swingHighIdx = array.new_int()
+var float[] swingLowVals = array.new_float()
+var int[] swingLowIdx = array.new_int()
+
+if barstate.isconfirmed
+    if not na(ph)
+        array.push(swingHighVals, ph)
+        array.push(swingHighIdx, bar_index - swingLen)
+    if not na(pl)
+        array.push(swingLowVals, pl)
+        array.push(swingLowIdx, bar_index - swingLen)
+
+    if lookback > 0
+        while array.size(swingHighIdx) > 0 and bar_index - array.get(swingHighIdx, 0) > lookback
+            array.shift(swingHighIdx)
+            array.shift(swingHighVals)
+        while array.size(swingLowIdx) > 0 and bar_index - array.get(swingLowIdx, 0) > lookback
+            array.shift(swingLowIdx)
+            array.shift(swingLowVals)
+
+lastHH = array.size(swingHighVals) > 0 ? array.get(swingHighVals, array.size(swingHighVals) - 1) : na
+lastHHIndex = array.size(swingHighIdx) > 0 ? array.get(swingHighIdx, array.size(swingHighIdx) - 1) : na
+lastLL = array.size(swingLowVals) > 0 ? array.get(swingLowVals, array.size(swingLowVals) - 1) : na
+lastLLIndex = array.size(swingLowIdx) > 0 ? array.get(swingLowIdx, array.size(swingLowIdx) - 1) : na
+
+//=== Structure ===//
+float atrValue = ta.atr(atrLen)
+float atrAvg = ta.sma(atrValue, atrLen)
+float rsiValue = ta.rsi(close, rsiLen)
+bool useHTF = tfHTF != ""
+float hSMA = na
+if useHTF
+    hSMA := request.security(syminfo.tickerid, tfHTF, ta.sma(close, 200), barmerge.gaps_on, barmerge.lookahead_off)
+
+var int trendDir = 0
+var bool prevBullBreak = false
+var bool prevBearBreak = false
+var line[] bosLines = array.new_line()
+var label[] bosLabels = array.new_label()
+
+bosSourceBull = closeOnly ? close : bosWickOK ? high : close
+bosSourceBear = closeOnly ? close : bosWickOK ? low : close
+
+bool bosBullCond = not na(lastHH) and bosSourceBull > lastHH and (bosMinDistATR <= 0 or (not na(atrValue) and bosSourceBull - lastHH >= bosMinDistATR * atrValue))
+bool bosBearCond = not na(lastLL) and bosSourceBear < lastLL and (bosMinDistATR <= 0 or (not na(atrValue) and lastLL - bosSourceBear >= bosMinDistATR * atrValue))
+
+bool bosBull = barstate.isconfirmed and bosBullCond and not prevBullBreak
+bool bosBear = barstate.isconfirmed and bosBearCond and not prevBearBreak
+
+prevBullBreak := bosBullCond
+prevBearBreak := bosBearCond
+
+bool bosEvent = false
+bool chochEvent = false
+int bosDir = 0
+float bosLevel = na
+int bosSwingIndex = na
+
+if bosBull
+    bosEvent := true
+    bosDir := 1
+    bosLevel := lastHH
+    bosSwingIndex := lastHHIndex
+if bosBear
+    bosEvent := true
+    bosDir := -1
+    bosLevel := lastLL
+    bosSwingIndex := lastLLIndex
+
+if bosEvent
+    chochEvent := (trendDir == -bosDir and trendDir != 0)
+    trendDir := bosDir
+
+    if showLines and not na(bosSwingIndex) and not na(bosLevel)
+        line l = line.new(bosSwingIndex, bosLevel, bar_index, bosLevel, extend=extend.right, color=chochEvent ? chochColor : bosColor, width=1)
+        array.push(bosLines, l)
+    if showLabels and not na(bosLevel)
+        string txt = bosDir == 1 ? (chochEvent ? "CHOCH ↑" : "BOS ↑") : (chochEvent ? "CHOCH ↓" : "BOS ↓")
+        label lbl = label.new(bar_index, bosDir == 1 ? high : low, txt, style=bosDir == 1 ? label.style_label_down : label.style_label_up, color=chochEvent ? chochColor : bosColor, textcolor=color.white)
+        array.push(bosLabels, lbl)
+
+//=== Order Blocks ===//
+var box[] obBoxes = array.new_box()
+var label[] obLabels = array.new_label()
+var int[] obDirs = array.new_int()
+var bool[] obActive = array.new_bool()
+var bool[] obMitigated = array.new_bool()
+var bool[] obFromChoch = array.new_bool()
+
+f_trim_boxes() =>
+    while array.size(obBoxes) > maxBoxes
+        box b = array.shift(obBoxes)
+        if not na(b)
+            box.delete(b)
+        label lb = array.shift(obLabels)
+        if not na(lb)
+            label.delete(lb)
+        array.shift(obDirs)
+        array.shift(obActive)
+        array.shift(obMitigated)
+        array.shift(obFromChoch)
+
+f_register_ob(int direction, bool fromChoch) =>
+    if direction == 1 and (obType == "both" or obType == "bullish")
+        float top = na
+        float bottom = na
+        int idx = na
+        for i = 1 to obLookback
+            int bi = bar_index - i
+            if bi < 0
+                break
+            float o = open[i]
+            float c = close[i]
+            float h = high[i]
+            float l = low[i]
+            bool isBear = c < o
+            if not isBear
+                continue
+            float range = h - l
+            float bodyPct = range != 0 ? math.abs(c - o) / range * 100.0 : 0.0
+            if bodyPct < obBodyPct
+                continue
+            top := math.max(o, c)
+            bottom := l
+            idx := bi
+            break
+        if not na(top) and not na(bottom) and not na(idx)
+            box bNew = box.new(idx, top, bar_index, bottom, bgcolor=color.new(bullObColor, showBoxes ? 0 : 100), border_color=color.new(color.green, 0))
+            label lNew = showLabels ? label.new(idx, top, "Bull OB", color=color.new(color.green, 0), textcolor=color.white, style=label.style_label_left) : na
+            array.push(obBoxes, bNew)
+            array.push(obLabels, lNew)
+            array.push(obDirs, 1)
+            array.push(obActive, true)
+            array.push(obMitigated, false)
+            array.push(obFromChoch, fromChoch)
+            f_trim_boxes()
+    if direction == -1 and (obType == "both" or obType == "bearish")
+        float top = na
+        float bottom = na
+        int idx = na
+        for i = 1 to obLookback
+            int bi = bar_index - i
+            if bi < 0
+                break
+            float o = open[i]
+            float c = close[i]
+            float h = high[i]
+            float l = low[i]
+            bool isBull = c > o
+            if not isBull
+                continue
+            float range = h - l
+            float bodyPct = range != 0 ? math.abs(c - o) / range * 100.0 : 0.0
+            if bodyPct < obBodyPct
+                continue
+            top := h
+            bottom := math.min(o, c)
+            idx := bi
+            break
+        if not na(top) and not na(bottom) and not na(idx)
+            box bNew = box.new(idx, top, bar_index, bottom, bgcolor=color.new(bearObColor, showBoxes ? 0 : 100), border_color=color.new(color.red, 0))
+            label lNew = showLabels ? label.new(idx, bottom, "Bear OB", color=color.new(color.red, 0), textcolor=color.white, style=label.style_label_left) : na
+            array.push(obBoxes, bNew)
+            array.push(obLabels, lNew)
+            array.push(obDirs, -1)
+            array.push(obActive, true)
+            array.push(obMitigated, false)
+            array.push(obFromChoch, fromChoch)
+            f_trim_boxes()
+
+if bosEvent
+    for i = 0 to array.size(obBoxes) - 1
+        if array.get(obActive, i) and array.get(obDirs, i) == -bosDir
+            box bRef = array.get(obBoxes, i)
+            label lbRef = array.get(obLabels, i)
+            array.set(obActive, i, false)
+            box.delete(bRef)
+            if not na(lbRef)
+                label.delete(lbRef)
+    f_register_ob(bosDir, chochEvent)
+
+//=== Signals ===//
+var bool longSignal = false
+var bool shortSignal = false
+var bool mitigatedSignal = false
+
+longSignal := false
+shortSignal := false
+mitigatedSignal := false
+
+f_pass_filters(bool isLong) =>
+    bool pass = true
+    if confirmWith == "rsi"
+        pass := pass and (isLong ? rsiValue > 50 : rsiValue < 50)
+    if confirmWith == "atrVol"
+        pass := pass and (not na(atrValue) and not na(atrAvg) ? atrValue >= atrMin * atrAvg : false)
+    if useHTF
+        bool htfOk = not na(hSMA) and (isLong ? close > hSMA : close < hSMA)
+        pass := pass and (barstate.isconfirmed ? htfOk : false)
+    pass
+
+if barstate.isconfirmed
+    for i = 0 to array.size(obBoxes) - 1
+        if not array.get(obActive, i)
+            continue
+        box bRef = array.get(obBoxes, i)
+        int dir = array.get(obDirs, i)
+        bool mitigated = array.get(obMitigated, i)
+        float top = box.get_top(bRef)
+        float bottom = box.get_bottom(bRef)
+        box.set_right(bRef, bar_index)
+        box.set_bgcolor(bRef, color.new(dir == 1 ? bullObColor : bearObColor, showBoxes ? 0 : 100))
+        box.set_border_color(bRef, color.new(dir == 1 ? color.green : color.red, showBoxes ? 0 : 100))
+        label lbRef = array.get(obLabels, i)
+        if not na(lbRef)
+            label.set_x(lbRef, box.get_left(bRef))
+        bool invalid = false
+        bool newMitigation = false
+        if dir == 1
+            if close < bottom
+                invalid := true
+            else if not mitigated and low <= top and close >= top
+                newMitigation := true
+        else if dir == -1
+            if close > top
+                invalid := true
+            else if not mitigated and high >= bottom and close <= bottom
+                newMitigation := true
+        if invalid
+            array.set(obActive, i, false)
+            box.delete(bRef)
+            if not na(lbRef)
+                label.delete(lbRef)
+        else
+            if newMitigation
+                array.set(obMitigated, i, true)
+                mitigatedSignal := true
+                if dir == 1 and f_pass_filters(true)
+                    if array.get(obFromChoch, i)
+                        longSignal := true
+                    else if trendDir == 1
+                        longSignal := true
+                if dir == -1 and f_pass_filters(false)
+                    if array.get(obFromChoch, i)
+                        shortSignal := true
+                    else if trendDir == -1
+                        shortSignal := true
+        if newMitigation and not na(lbRef)
+            label.set_text(lbRef, dir == 1 ? "Bull OB✓" : "Bear OB✓")
+            label.set_color(lbRef, color.new(color.yellow, 0))
+            label.set_textcolor(lbRef, color.black)
+        if invalid and not na(lbRef)
+            label.set_text(lbRef, dir == 1 ? "Bull OB✕" : "Bear OB✕")
+            label.set_color(lbRef, color.new(color.gray, 0))
+            label.set_textcolor(lbRef, color.black)
+
+//=== Plots ===//
+plot(lastHH, "Last HH", color=color.new(color.green, 40), linewidth=1)
+plot(lastLL, "Last LL", color=color.new(color.red, 40), linewidth=1)
+
+//=== Alerts ===//
+alertcondition(bosEvent, "BOS", "Break of structure detected")
+alertcondition(chochEvent, "CHOCH", "Change of character detected")
+alertcondition(longSignal, "LongEntry", "Long entry condition triggered")
+alertcondition(shortSignal, "ShortEntry", "Short entry condition triggered")
+alertcondition(mitigatedSignal, "OBMitigated", "Order block mitigated")
